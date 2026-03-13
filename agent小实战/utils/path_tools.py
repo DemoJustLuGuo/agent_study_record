@@ -16,4 +16,4 @@ def get_abs_path(relative_path: str) -> str:
 
 
 if __name__ ==  "__main__":
-    print(get_abs_path("config/config.txt"))
+    print(get_abs_path("data"))

@@ -3,9 +3,9 @@
 import os,hashlib
 from utils.log import logger
 from langchain_core.documents import Document
-from langchain_community.document_loaders import PyPDFDirectoryLoader, TextLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
-def get_file_md5_hex(filepath,str):
+def get_file_md5_hex(filepath:str):
     if not os.path.exists(filepath):
         logger.error(f"文件{filepath}不存在")
         return
@@ -39,8 +39,8 @@ def listdir_with_allowed_type(path:str,allowed_types:tuple[str]):
     return tuple(files)
 
 def pdf_loader(filepath:str,passwd=None) -> list[Document]:
-    return PyPDFDirectoryLoader(filepath,passwd).load()
+    return PyPDFLoader(filepath,passwd).load()
 
 def txt_loader(filepath:str) -> list[Document]:
-    return text_loader(filepath).load()
+    return TextLoader(filepath,encoding="utf-8").load()
 

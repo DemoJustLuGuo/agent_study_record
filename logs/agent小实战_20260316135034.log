@@ -1,0 +1,41 @@
+2026-03-16 13:50:34,433 - agent小实战 - ERROR - vector_store.py:80 - 加载文件C:\Users\19259\Desktop\project\agent_study_record\data\扫地机器人1.txt时发生错误: Error loading C:\Users\19259\Desktop\project\agent_study_record\data\扫地机器人1.txt
+Traceback (most recent call last):
+  File "C:\Users\19259\AppData\Local\Programs\Python\Python312\Lib\site-packages\langchain_community\document_loaders\text.py", line 43, in lazy_load
+    text = f.read()
+           ^^^^^^^^
+UnicodeDecodeError: 'gbk' codec can't decode byte 0x80 in position 8: illegal multibyte sequence
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\19259\Desktop\project\agent_study_record\rag\vector_store.py", line 65, in load_documents
+    documents : list[Document] = get_file_documents(path)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\19259\Desktop\project\agent_study_record\rag\vector_store.py", line 48, in get_file_documents
+    return txt_loader(read_path)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\19259\Desktop\project\agent_study_record\utils\file_handler.py", line 45, in txt_loader
+    return TextLoader(filepath).load()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\19259\AppData\Local\Programs\Python\Python312\Lib\site-packages\langchain_core\document_loaders\base.py", line 43, in load
+    return list(self.lazy_load())
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\19259\AppData\Local\Programs\Python\Python312\Lib\site-packages\langchain_community\document_loaders\text.py", line 56, in lazy_load
+    raise RuntimeError(f"Error loading {self.file_path}") from e
+RuntimeError: Error loading C:\Users\19259\Desktop\project\agent_study_record\data\扫地机器人1.txt
+2026-03-16 13:50:34,434 - agent小实战 - ERROR - vector_store.py:80 - 加载文件C:\Users\19259\Desktop\project\agent_study_record\data\扫地机器人2.pdf时发生错误: Unacceptable pattern: None
+Traceback (most recent call last):
+  File "c:\Users\19259\Desktop\project\agent_study_record\rag\vector_store.py", line 65, in load_documents
+    documents : list[Document] = get_file_documents(path)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\19259\Desktop\project\agent_study_record\rag\vector_store.py", line 50, in get_file_documents
+    return pdf_loader(read_path)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\19259\Desktop\project\agent_study_record\utils\file_handler.py", line 42, in pdf_loader
+    return PyPDFDirectoryLoader(filepath,passwd).load()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\19259\AppData\Local\Programs\Python\Python312\Lib\site-packages\langchain_community\document_loaders\pdf.py", line 536, in load
+    for i in items:
+  File "C:\Users\19259\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1088, in glob
+    raise ValueError("Unacceptable pattern: {!r}".format(pattern))
+ValueError: Unacceptable pattern: None

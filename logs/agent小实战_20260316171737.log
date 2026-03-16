@@ -1,0 +1,1 @@
+2026-03-16 17:17:37,772 - agent小实战 - WARNING - agent_tools.py:101 - name='fetch_external_data' description='从外部系统中获用户的使用记录，以消息字符串的形式返回，如果未检索到则返回空字符串' args_schema=<class 'langchain_core.utils.pydantic.fetch_external_data'> func=<function fetch_external_data at 0x000002B01A3D1440>未检索到用户1020在2024-06的使用记录

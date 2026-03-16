@@ -1,2 +1,2 @@
 chat_model_name: Pro/MiniMaxAI/MiniMax-M2.5
-embedding_model_name: text-embedding-3-small
+embedding_model_name: Qwen/Qwen3-Embedding-8B

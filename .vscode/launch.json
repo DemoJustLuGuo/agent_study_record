@@ -2,15 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "运行当前 Python 文件 (根目录启动)",
+            "name": "Python: 模拟 PyCharm 启动",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}",
+            "program": "${file}",           // 运行当前打开的文件
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",      
+            "cwd": "${workspaceFolder}",      // 核心：强制工作目录为项目根目录
             "env": {
-                "PYTHONPATH": "${workspaceFolder}" 
-            }
+                "PYTHONPATH": "${workspaceFolder}" // 核心：将根目录加入搜索路径
+            },
+            "purpose": ["debug-test", "debug-in-terminal"]
         }
     ]
 }

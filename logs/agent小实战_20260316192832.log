@@ -1,0 +1,18 @@
+2026-03-16 19:28:33,026 - agent小实战 - INFO - middleware.py:36 - [log_before_model]即将调用模型，带有1条消息。
+2026-03-16 19:28:33,026 - agent小实战 - DEBUG - middleware.py:37 - [log_before_model]HumanMessage | 请根据以下参考资料总结一下人工智能的定义，并结合当前月份和用户位置信息进行分析，最后生成一份报告。 
+2026-03-16 19:28:46,381 - agent小实战 - INFO - middleware.py:17 - [tool_monitor]执行工具:rag_summarize
+2026-03-16 19:28:46,381 - agent小实战 - INFO - middleware.py:18 - [tool_monitor]传入参数:{'query': '人工智能的定义'}
+2026-03-16 19:28:46,383 - agent小实战 - INFO - middleware.py:17 - [tool_monitor]执行工具:get_current_month
+2026-03-16 19:28:46,385 - agent小实战 - INFO - middleware.py:18 - [tool_monitor]传入参数:{}
+2026-03-16 19:28:46,386 - agent小实战 - INFO - middleware.py:22 - [tool_monitor]工具get_current_month调用成功:
+2026-03-16 19:28:46,386 - agent小实战 - INFO - middleware.py:17 - [tool_monitor]执行工具:get_user_location
+2026-03-16 19:28:46,386 - agent小实战 - INFO - middleware.py:18 - [tool_monitor]传入参数:{}
+2026-03-16 19:28:46,387 - agent小实战 - INFO - middleware.py:22 - [tool_monitor]工具get_user_location调用成功:
+2026-03-16 19:28:49,715 - agent小实战 - INFO - middleware.py:22 - [tool_monitor]工具rag_summarize调用成功:
+2026-03-16 19:28:49,716 - agent小实战 - INFO - middleware.py:36 - [log_before_model]即将调用模型，带有5条消息。
+2026-03-16 19:28:49,717 - agent小实战 - DEBUG - middleware.py:37 - [log_before_model]ToolMessage | 上海市 
+2026-03-16 19:28:54,915 - agent小实战 - INFO - middleware.py:17 - [tool_monitor]执行工具:fill_context_for_report
+2026-03-16 19:28:54,915 - agent小实战 - INFO - middleware.py:18 - [tool_monitor]传入参数:{}
+2026-03-16 19:28:54,915 - agent小实战 - INFO - middleware.py:22 - [tool_monitor]工具fill_context_for_report调用成功:
+2026-03-16 19:28:54,916 - agent小实战 - INFO - middleware.py:36 - [log_before_model]即将调用模型，带有7条消息。
+2026-03-16 19:28:54,916 - agent小实战 - DEBUG - middleware.py:37 - [log_before_model]ToolMessage | fill_context_for_report已经调用 

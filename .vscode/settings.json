@@ -1,0 +1,7 @@
+{
+    "code-runner.fileDirectoryAsCwd": false,
+    "python.terminal.executeInFileDir": false,
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "${workspaceFolder}"
+    }
+}

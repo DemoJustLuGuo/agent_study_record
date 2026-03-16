@@ -1,20 +1,20 @@
 import os
 
-
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from utils.path_tools import get_abs_path
 from utils.config_handler import chroma_conf
 from model.factory import embeddings_model
 from langchain_text_splitters import RecursiveJsonSplitter
 from utils.file_handler import txt_loader,pdf_loader,listdir_with_allowed_type,get_file_md5_hex
-from utils.logger_handler import logger
+from utils.log import logger
 
-class VectorStpreService:
+class VectorStoreService:
     def __init__(self):
         self.vector_store = Chroma(
             collection_name = chroma_conf["collection_name"],
             embbedding_function = None,
-            persist_directory = chroma_conf["persist_directory"]
+            persist_directory = chroma_conf["persist_directory"],
         )
         self.spliter = RecursivecharacterTextSplitter(
             chunk_size = chroma_conf["chunk_size"],
@@ -81,7 +81,7 @@ class VectorStpreService:
 
 
 if __name__ == "__main__":
-    vector_store_service = VectorStpreService()
+    vector_store_service = VectorStoreService()
     vector_store_service.load_documents()
 
     retriever = vector_store_service.get_retriever()

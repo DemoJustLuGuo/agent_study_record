@@ -1,9 +1,9 @@
 #文件处理工具
 
 import os,hashlib
-from log import logger
+from utils.log import logger
 from langchain_core.documents import Document
-from langchain_community.document_loaders import  PyPDFDirectoryLoader,text_loader
+from langchain_community.document_loaders import PyPDFDirectoryLoader, TextLoader
 
 def get_file_md5_hex(filepath,str):
     if not os.path.exists(filepath):

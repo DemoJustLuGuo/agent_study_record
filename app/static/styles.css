@@ -40,6 +40,59 @@ body {
     color: var(--muted);
 }
 
+.uploader {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 14px;
+}
+
+.uploader h2 {
+    margin: 0 0 10px;
+    font-size: 18px;
+}
+
+.upload-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#upload-file {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    background: #fff;
+}
+
+#upload-btn {
+    border: none;
+    background: #065f46;
+    color: #fff;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+}
+
+#upload-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.upload-result {
+    margin: 10px 0 0;
+    color: var(--muted);
+}
+
+.upload-result.error {
+    color: #b91c1c;
+}
+
+.upload-result.success {
+    color: #065f46;
+}
+
 .chat {
     flex: 1;
     border: 1px solid var(--border);
@@ -75,6 +128,16 @@ body {
 .composer {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mode-switch {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 14px;
 }
 
 #prompt {
@@ -112,6 +175,11 @@ body {
 
     .composer {
         flex-direction: column;
+    }
+
+    .upload-form {
+        flex-direction: column;
+        align-items: stretch;
     }
 
     #send-btn {

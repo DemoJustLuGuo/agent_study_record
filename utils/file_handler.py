@@ -27,11 +27,11 @@ def get_file_md5_hex(filepath:str):
         logger.error(f"计算文件{filepath}的MD5值时发生错误: {str(e)}")
         return None
 
-def listdir_with_allowed_type(path:str,allowed_types:tuple[str]):
+def listdir_with_allowed_type(path:str,allowed_types:tuple[str, ...]) -> tuple[str, ...]:
     files = []
     if not os.path.isdir(path):
         logger.error(f"[listdir_with_allowed_type]{path}不是一个目录")
-        return allowed_types
+        return tuple()
 
     for f in os.listdir(path):
         if f.endswith(allowed_types):

@@ -1,7 +1,7 @@
 from langchain.agents import create_agent
 from model.factory import chat_model
 from utils.prompt_loader import load_system_prompt
-from agent.tools.agent_tools import rag_summarize,get_weather,get_user_location,get_user_id,get_current_month,generate_external_data,fill_context_for_report,fetch_external_data
+from agent.tools.agent_tools import rag_summarize,get_weather,get_user_location,get_user_id,get_current_month,fill_context_for_report,fetch_external_data
 from agent.tools.middleware import monitor_tool,log_before_model,report_prompt_switch
 
 
@@ -10,7 +10,7 @@ class ReactAgent:
     def __init__(self):
         self.agent = create_agent(
             model=chat_model,  
-            tools=[rag_summarize,get_weather,get_user_location,get_user_id,get_current_month,generate_external_data,fill_context_for_report,fetch_external_data], 
+            tools=[rag_summarize,get_weather,get_user_location,get_user_id,get_current_month,fill_context_for_report,fetch_external_data], 
             system_prompt= load_system_prompt(),
             middleware = [monitor_tool,log_before_model,report_prompt_switch],
         )
@@ -27,9 +27,3 @@ class ReactAgent:
             latest_message = chunk["messages"][-1]
             if latest_message.content:
                 yield latest_message.content.strip() + "\n"
-
-if __name__ == "__main__":
-    agent = ReactAgent()
-    query = "请根据以下参考资料总结一下人工智能的定义，并结合当前月份和用户位置信息进行分析，最后生成一份报告。"
-    for chunk in agent.execute_stream(query):
-        print(chunk,end="")

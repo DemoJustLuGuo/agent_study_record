@@ -1,18 +1,16 @@
-from rag.vector_store import VectorStoreService
+from typing import Any
+
 from langchain_core.documents import Document
-from utils.prompt_loader import load_rag_prompt
-from langchain_core.prompts import PromptTemplate
-from model.factory import chat_model
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+
+from model.factory import chat_model
+from rag.vector_store import VectorStoreService
+from utils.log import logger
+from utils.prompt_loader import load_rag_prompt
 
 
-def print_prompt(prompt):
-    print("="*20)
-    print(prompt.to_string())
-    print("="*20)
-    return prompt
-
-class RAGSummarizeService(object):
+class RAGSummarizeService:
     def __init__(self):
         self.vector_store = VectorStoreService()
         self.retriever = self.vector_store.get_retriever()
@@ -23,30 +21,50 @@ class RAGSummarizeService(object):
 
 
     def _init_chain(self):
-        chain = self.prompt_template | print_prompt | self.model | StrOutputParser()
-        return chain
+        return self.prompt_template | self.model | StrOutputParser()
 
-    def retriever_docs(self,query:str) -> str:
-        return  self.retriever.invoke(query)
+    def retriever_docs(self, query:str) -> list[Document]:
+        return self.retriever.invoke(query)
 
-    def rag_summarize(self,query:str) -> str:
+    @staticmethod
+    def _build_context(context_docs:list[Document]) -> str:
+        context_blocks = []
+        for index, doc in enumerate(context_docs, start=1):
+            context_blocks.append(
+                f"【参考资料{index}】{doc.page_content}\n"
+                f"【元数据】{doc.metadata}"
+            )
+        return "\n\n".join(context_blocks)
+
+    def answer_with_references(self, query:str) -> dict[str, Any]:
         context_docs = self.retriever_docs(query)
-        context = ""
-        counter = 0
-        for doc in context_docs:
-            counter += 1
-            context += f"【参考资料{counter}】:{doc.page_content} | 参考元数据:{doc.metadata}\n"
+        context = self._build_context(context_docs)
 
-        return self.chain.invoke(
+        answer = self.chain.invoke(
             {
                 "input": query,
                 "context": context,
             }
         )
-            
-if __name__ == "__main__":
-    rag = RAGSummarizeService()
-    print(rag.rag_summarize("请根据以上参考资料总结一下人工智能的定义"))
+
+        references = [
+            {
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+            }
+            for doc in context_docs
+        ]
+
+        logger.info(f"在线RAG检索完成，命中片段数量: {len(references)}")
+        return {
+            "query": query,
+            "answer": answer,
+            "references": references,
+        }
+
+    def rag_summarize(self, query:str) -> str:
+        return self.answer_with_references(query)["answer"]
+
 
 
 

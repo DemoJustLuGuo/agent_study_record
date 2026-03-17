@@ -6,6 +6,8 @@ from utils.config_handler import agent_conf
 from utils.path_tools import get_abs_path
 from utils.log import logger
 
+from datetime import datetime
+import json
 import os,random
 
 rag = RAGSummarizeService()
@@ -31,7 +33,8 @@ def get_user_id() -> str:
 
 @tool(description="获取当前月份，以纯字符串形式返回")
 def get_current_month() -> str:
-    return "当前月份是6月。"
+    current_month = datetime.now().month
+    return f"当前月份是{current_month}月。"
 
 def generate_external_data():
     """
@@ -91,14 +94,17 @@ def generate_external_data():
                 }
                     
 
-@tool(description="从外部系统中获用户的使用记录，以消息字符串的形式返回，如果未检索到则返回空字符串")
+@tool(description="从外部系统中获取用户的使用记录，返回JSON字符串；如果未检索到则返回空字符串")
 def fetch_external_data(user_id:str,month:str) -> str:
     generate_external_data()
 
-    try:
-        return external_data[user_id][month]
-    except KeyError:
-            logger.warning(f"未检索到用户{user_id}在{month}的使用记录")
+    user_records = external_data.get(user_id, {})
+    record = user_records.get(month)
+    if record is None:
+        logger.warning(f"未检索到用户{user_id}在{month}的使用记录")
+        return ""
+
+    return json.dumps(record, ensure_ascii=False)
 
 @tool(description="无入参，无返回值，调用后触发中间件自动为报告生成的场景动态注入上下文信息，为后续提示词切换提供上下文信息")
 def fill_context_for_report():

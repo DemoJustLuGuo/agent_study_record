@@ -1,0 +1,2 @@
+2026-03-17 12:31:08,158 - agent小实战 - INFO - middleware.py:36 - [log_before_model]即将调用模型，带有1条消息。
+2026-03-17 12:31:08,159 - agent小实战 - DEBUG - middleware.py:37 - [log_before_model]HumanMessage | 你是什么ai？ 

@@ -8,7 +8,7 @@ st.divider()
 if "agent" not in st.session_state:
     st.session_state.agent = ReactAgent()
 
-if "messages" not in st.session_state:
+if "message" not in st.session_state:
     st.session_state["message"] = []
     
 for message in st.session_state["message"]:

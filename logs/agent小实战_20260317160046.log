@@ -1,0 +1,11 @@
+2026-03-17 16:01:21,933 - agent小实战 - INFO - middleware.py:36 - [log_before_model]即将调用模型，带有1条消息。
+2026-03-17 16:01:21,933 - agent小实战 - DEBUG - middleware.py:37 - [log_before_model]HumanMessage | 你是谁？ 
+2026-03-17 16:01:23,765 - agent小实战 - INFO - middleware.py:17 - [tool_monitor]执行工具:get_user_id
+2026-03-17 16:01:23,765 - agent小实战 - INFO - middleware.py:18 - [tool_monitor]传入参数:{}
+2026-03-17 16:01:23,766 - agent小实战 - INFO - middleware.py:22 - [tool_monitor]工具get_user_id调用成功:
+2026-03-17 16:01:23,766 - agent小实战 - INFO - middleware.py:17 - [tool_monitor]执行工具:get_current_month
+2026-03-17 16:01:23,768 - agent小实战 - INFO - middleware.py:18 - [tool_monitor]传入参数:{}
+2026-03-17 16:01:23,768 - agent小实战 - INFO - middleware.py:22 - [tool_monitor]工具get_current_month调用成功:
+2026-03-17 16:01:23,769 - agent小实战 - INFO - middleware.py:36 - [log_before_model]即将调用模型，带有4条消息。
+2026-03-17 16:01:23,769 - agent小实战 - DEBUG - middleware.py:37 - [log_before_model]ToolMessage | 当前月份是6月。 
+2026-03-17 16:01:39,572 - agent小实战 - INFO - rag_service.py:58 - 在线RAG检索完成，命中片段数量: 1

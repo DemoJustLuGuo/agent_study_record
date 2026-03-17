@@ -123,6 +123,46 @@ def upload_knowledge():
     return jsonify({"result": result})
 
 
+@app.post("/api/knowledge/sync")
+def sync_knowledge_sources():
+    try:
+        result = get_knowledge_base_service().sync_removed_sources()
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    return jsonify(result)
+
+
+@app.post("/api/knowledge/snapshot")
+def create_knowledge_snapshot():
+    payload = request.get_json(silent=True) or {}
+    tag = (payload.get("tag") or "").strip()
+
+    try:
+        snapshot_name = get_knowledge_base_service().create_snapshot(tag=tag)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    return jsonify({"snapshot": snapshot_name})
+
+
+@app.post("/api/knowledge/rollback")
+def rollback_knowledge_snapshot():
+    payload = request.get_json(silent=True) or {}
+    snapshot_name = (payload.get("snapshot") or "").strip()
+    if not snapshot_name:
+        return jsonify({"error": "snapshot is required"}), 400
+
+    try:
+        restored_snapshot = get_knowledge_base_service().rollback_snapshot(snapshot_name)
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    return jsonify({"snapshot": restored_snapshot, "result": "ok"})
+
+
 if __name__ == "__main__":
     host = os.environ.get("APP_HOST", "127.0.0.1")
     port = int(os.environ.get("APP_PORT", "7860"))

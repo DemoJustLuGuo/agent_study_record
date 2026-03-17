@@ -3,10 +3,11 @@ persist_directory: chroma_db
 k: 3
 data_path: data
 md5_hex_store: md5.text
+index_manifest_store: chroma_manifest.json
+lifecycle_snapshot_dir: chroma_snapshots
 allowed_knowledge_file_type: ["txt", "pdf"]
 
 chunk_size: 200
 chunk_overlap: 20
 
-separator: ["\n","\n","。","， ","； ","！ ","？ "]
-
+separator: ["\n", "\n", "。", "， ", "； ", "！ ", "？ "]

@@ -12,6 +12,15 @@ class KnowledgeBaseService:
             operator=operator,
         )
 
+    def sync_removed_sources(self) -> dict[str, object]:
+        return self.vector_store.sync_removed_sources()
+
+    def create_snapshot(self, tag:str="") -> str:
+        return self.vector_store.create_snapshot(tag=tag)
+
+    def rollback_snapshot(self, snapshot_name:str) -> str:
+        return self.vector_store.rollback_snapshot(snapshot_name=snapshot_name)
+
 
 if __name__ == "__main__":
     service = KnowledgeBaseService()

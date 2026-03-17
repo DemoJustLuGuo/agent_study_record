@@ -14,7 +14,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from html import unescape
 from typing import Optional
+from urllib.error import URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
+import xml.etree.ElementTree as ET
 
 rag = RAGSummarizeService()
 user_id =["1001","1002","1003","1004","1005","1006","1007","1008","1009","1010"]
@@ -22,6 +27,8 @@ month = ["2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","
 external_data = {}
 TOOL_TIMEOUT_SECONDS = 30
 TOOL_OUTPUT_MAX_CHARS = 6000
+WEB_SEARCH_TIMEOUT_SECONDS = 15
+BING_CN_SEARCH_URL = "https://cn.bing.com/search?q="
 
 
 def _truncate_output(text:str) -> str:
@@ -86,9 +93,89 @@ def _resolve_matlab_runtime() -> Optional[tuple[str, str]]:
 
     return None
 
+
+def _load_text_from_url(url:str, timeout:int) -> Optional[str]:
+    try:
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            },
+        )
+        with urlopen(request, timeout=timeout) as response:
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            encoding = "utf-8"
+            if "charset=" in content_type:
+                encoding = content_type.split("charset=")[-1].split(";")[0].strip() or "utf-8"
+
+            return response.read().decode(encoding, errors="replace")
+    except URLError as e:
+        logger.warning(f"联网请求失败: {str(e)}")
+    except Exception as e:
+        logger.warning(f"联网请求异常: {str(e)}")
+    return None
+
+
+def _parse_bing_rss_items(rss_text:str, max_items:int=5) -> list[str]:
+    try:
+        root = ET.fromstring(rss_text)
+    except ET.ParseError as e:
+        logger.warning(f"必应RSS解析失败: {str(e)}")
+        return []
+
+    snippets:list[str] = []
+    items = root.findall("./channel/item")
+
+    rank = 1
+    for item in items:
+        if rank > max_items:
+            break
+
+        title = unescape((item.findtext("title") or "").strip())
+        link = unescape((item.findtext("link") or "").strip())
+        desc = unescape((item.findtext("description") or "").strip())
+
+        title = " ".join(title.split())
+        desc = " ".join(desc.split())
+        link = " ".join(link.split())
+
+        if not title:
+            continue
+
+        if desc and link:
+            snippets.append(f"{rank}. {title} - {desc} ({link})")
+        elif desc:
+            snippets.append(f"{rank}. {title} - {desc}")
+        elif link:
+            snippets.append(f"{rank}. {title} ({link})")
+        else:
+            snippets.append(f"{rank}. {title}")
+        rank += 1
+
+    return snippets
+
 @tool(description="从向量存储中检索参考资料")
 def rag_summarize(query:str) -> str:
     return rag.rag_summarize(query)
+
+
+@tool(description="联网搜索公开信息并返回前几条结果摘要，适用于标准、术语、参数范围、行业资料快速核验")
+def web_search(query:str) -> str:
+    query = (query or "").strip()
+    if not query:
+        return "【失败】web_search查询为空"
+
+    bing_rss_url = BING_CN_SEARCH_URL + quote(query) + "&format=rss&setlang=zh-cn"
+    rss_text = _load_text_from_url(bing_rss_url, timeout=WEB_SEARCH_TIMEOUT_SECONDS)
+    if rss_text is None:
+        return "【失败】web_search联网请求失败，请稍后重试"
+
+    snippets = _parse_bing_rss_items(rss_text, max_items=5)
+
+    if not snippets:
+        return "【成功】web_search已执行（必应中国RSS），但未检索到可用摘要结果"
+
+    return _truncate_output("\n".join(snippets))
 
 @tool(description="获取指定城市的天气信息，以消息字符串的方式返回")
 def get_weather(city:str) -> str:

@@ -2,14 +2,13 @@
 
 from langchain_core.tools import tool
 from rag.rag_service import RAGSummarizeService
+from rag.memory_service import LongTermMemoryService
 from utils.config_handler import agent_conf
 from utils.path_tools import get_abs_path
 from utils.log import logger
 
-from datetime import datetime
 import json
 import os
-import random
 import shutil
 import subprocess
 import sys
@@ -22,8 +21,7 @@ from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 rag = RAGSummarizeService()
-user_id =["1001","1002","1003","1004","1005","1006","1007","1008","1009","1010"]
-month = ["2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12"]
+memory = LongTermMemoryService()
 external_data = {}
 TOOL_TIMEOUT_SECONDS = 30
 TOOL_OUTPUT_MAX_CHARS = 6000
@@ -177,24 +175,6 @@ def web_search(query:str) -> str:
 
     return _truncate_output("\n".join(snippets))
 
-@tool(description="获取指定城市的天气信息，以消息字符串的方式返回")
-def get_weather(city:str) -> str:
-    return f"{city}的天气晴朗，温度25摄氏度，空气湿度为50%，南风1级，最近6小时降雨概率极低。"
-    
-@tool(description="获取用户的位置信息，以纯字符串形式返回")
-def get_user_location() -> str:
-    return random.choice(["北京市", "上海市", "广州市", "深圳市", "杭州市"])
-
-@tool(description="获取用户的id信息，以纯字符串形式返回")
-def get_user_id() -> str:
-    return "用户ID: 123456"
-
-@tool(description="获取当前月份，以纯字符串形式返回")
-def get_current_month() -> str:
-    current_month = datetime.now().month
-    return f"当前月份是{current_month}月。"
-
-
 @tool(description="执行Python代码并返回执行结果，适用于通信算法快速计算、验证与仿真")
 def python(code:str) -> str:
     code = (code or "").strip()
@@ -321,3 +301,13 @@ def fetch_external_data(user_id:str,month:str) -> str:
 @tool(description="无入参，无返回值，调用后触发中间件自动为报告生成的场景动态注入上下文信息，为后续提示词切换提供上下文信息")
 def fill_context_for_report():
     return "fill_context_for_report已经调用"
+
+
+@tool(description="将用户偏好或项目笔记写入长期向量记忆，支持指定user_id、scope、project标签")
+def store_memory(note:str, user_id:str="global", scope:str="preference", project:str="") -> str:
+    return memory.add_memory(note=note, user_id=user_id, scope=scope, project=project)
+
+
+@tool(description="按query检索长期向量记忆，可按user_id、project过滤，返回相关记忆摘要")
+def search_memory(query:str, user_id:str="global", project:str="") -> str:
+    return memory.search_memory(query=query, user_id=user_id, project=project)

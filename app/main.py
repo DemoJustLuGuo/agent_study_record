@@ -1,14 +1,14 @@
 import os
 from threading import Lock
 
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import Flask, Response, jsonify, request, stream_with_context
 
 from agent.tools.react_agent import ReactAgent
 from rag.knowledge_base import KnowledgeBaseService
 from rag.rag_service import RAGSummarizeService
 
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+app = Flask(__name__)
 agent = None
 agent_lock = Lock()
 knowledge_base_service = None
@@ -46,7 +46,13 @@ def get_rag_service() -> RAGSummarizeService:
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return jsonify(
+        {
+            "service": "agent_study_record_api",
+            "status": "ok",
+            "message": "Desktop frontend has migrated to Electron. Use /api/* endpoints.",
+        }
+    )
 
 
 @app.get("/api/health")

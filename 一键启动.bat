@@ -4,13 +4,21 @@ setlocal
 cd /d "%~dp0"
 
 set "PYTHON_EXE="
-if exist ".venv\Scripts\python.exe" set "PYTHON_EXE=.venv\Scripts\python.exe"
-if not defined PYTHON_EXE if exist "venv\Scripts\python.exe" set "PYTHON_EXE=venv\Scripts\python.exe"
+if exist ".venv\Scripts\python.exe" set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
+if not defined PYTHON_EXE if exist "venv\Scripts\python.exe" set "PYTHON_EXE=%CD%\venv\Scripts\python.exe"
 if not defined PYTHON_EXE set "PYTHON_EXE=python"
 
 "%PYTHON_EXE%" --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python not found. Please install Python 3.10+ or create .venv.
+    pause
+    exit /b 1
+)
+
+"%PYTHON_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Python 3.10+ is required.
+    "%PYTHON_EXE%" --version
     pause
     exit /b 1
 )
@@ -21,55 +29,12 @@ if not exist "requirements.txt" (
     exit /b 1
 )
 
-echo [INFO] Checking dependencies...
-set "REQ_CHECK_SCRIPT=%TEMP%\req_check_%RANDOM%.py"
-> "%REQ_CHECK_SCRIPT%" (
-    echo import sys
-    echo from importlib import metadata as md
-    echo mismatches = []
-    echo with open^('requirements.txt', 'r', encoding='utf-8'^) as f:
-    echo^    for raw in f:
-    echo^        line = raw.strip^(^)
-    echo^        if ^(not line^) or line.startswith^('#'^):
-    echo^            continue
-    echo^        line = line.split^(';', 1^)[0].strip^(^)
-    echo^        if not line:
-    echo^            continue
-    echo^        if '==' in line:
-    echo^            pkg, expected = [part.strip^(^) for part in line.split^('==', 1^)]
-    echo^            try:
-    echo^                installed = md.version^(pkg^)
-    echo^            except md.PackageNotFoundError:
-    echo^                mismatches.append^(f"{pkg}=={expected} [not installed]"^)
-    echo^                continue
-    echo^            if installed != expected:
-    echo^                mismatches.append^(f"{pkg}=={expected} [installed {installed}]"^)
-    echo^        else:
-    echo^            pkg = line
-    echo^            try:
-    echo^                md.version^(pkg^)
-    echo^            except md.PackageNotFoundError:
-    echo^                mismatches.append^(f"{pkg} [not installed]"^)
-    echo if mismatches:
-    echo^    print^('[INFO] Dependencies are missing or version-mismatched:'^)
-    echo^    for item in mismatches:
-    echo^        print^(f' - {item}'^)
-    echo^    sys.exit^(1^)
-    echo print^('[INFO] Dependencies satisfy requirements.txt'^)
-)
-
-"%PYTHON_EXE%" "%REQ_CHECK_SCRIPT%"
-set "REQ_STATUS=%ERRORLEVEL%"
-del "%REQ_CHECK_SCRIPT%" >nul 2>&1
-
-if not "%REQ_STATUS%"=="0" (
-    echo [INFO] Installing dependencies from requirements.txt...
-    "%PYTHON_EXE%" -m pip install -r requirements.txt
-    if errorlevel 1 (
-        echo [ERROR] Dependency installation failed.
-        pause
-        exit /b 1
-    )
+echo [INFO] Verifying/installing Python dependencies from requirements.txt...
+"%PYTHON_EXE%" -m pip install --disable-pip-version-check -r requirements.txt
+if errorlevel 1 (
+    echo [ERROR] Python dependency installation failed.
+    pause
+    exit /b 1
 )
 
 if "%SILICONFLOW_API_KEY%"=="" if exist ".env" (
@@ -91,6 +56,7 @@ if "%SILICONFLOW_API_KEY%"=="" (
 
 if "%APP_HOST%"=="" set "APP_HOST=127.0.0.1"
 if "%APP_PORT%"=="" set "APP_PORT=7860"
+if "%BACKEND_URL%"=="" set "BACKEND_URL=http://%APP_HOST%:%APP_PORT%"
 
 if "%PYTHONPATH%"=="" (
     set "PYTHONPATH=%CD%"
@@ -98,11 +64,60 @@ if "%PYTHONPATH%"=="" (
     set "PYTHONPATH=%CD%;%PYTHONPATH%"
 )
 
-echo [INFO] Starting Flask app on http://%APP_HOST%:%APP_PORT% ...
-"%PYTHON_EXE%" -m app.main
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Node.js not found. Please install Node.js 18+.
+    pause
+    exit /b 1
+)
+
+where npm >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] npm not found. Please reinstall Node.js.
+    pause
+    exit /b 1
+)
+
+if not exist "electron\package.json" (
+    echo [ERROR] electron\package.json not found.
+    pause
+    exit /b 1
+)
+
+echo [INFO] Checking Electron dependencies...
+pushd electron
+
+if not exist "node_modules" (
+    echo [INFO] node_modules not found, running npm install...
+    call npm install
+    if errorlevel 1 (
+        echo [ERROR] npm install failed.
+        popd
+        pause
+        exit /b 1
+    )
+) else (
+    call npm ls --depth=0 >nul 2>&1
+    if errorlevel 1 (
+        echo [INFO] Detected invalid/missing npm packages, running npm install...
+        call npm install
+        if errorlevel 1 (
+            echo [ERROR] npm install failed.
+            popd
+            pause
+            exit /b 1
+        )
+    )
+)
+
+echo [INFO] Starting Electron desktop app...
+echo [INFO] Backend URL: %BACKEND_URL%
+call npm start
 set "EXIT_CODE=%ERRORLEVEL%"
+popd
+
 if not "%EXIT_CODE%"=="0" (
-    echo [ERROR] App exited with code %EXIT_CODE%.
+    echo [ERROR] Electron app exited with code %EXIT_CODE%.
 )
 
 pause

@@ -17,6 +17,11 @@ build/
 dist/
 *.egg-info/
 
+# Electron dependencies and artifacts
+electron/node_modules/
+electron/dist/
+electron/out/
+
 # Runtime logs
 logs/
 *.log

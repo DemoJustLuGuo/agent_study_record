@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Studio Desktop</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>Agent Studio Desktop</h1>
+        <p class="subtitle">Electron 前端 | 本地 Flask API 服务</p>
+      </div>
+      <div class="status-wrap">
+        <span id="backend-status" class="status-badge pending">后端状态: 初始化中</span>
+        <span id="backend-url" class="backend-url"></span>
+      </div>
+    </header>
+
+    <section class="panel chat-panel">
+      <div id="chat" class="chat" aria-live="polite"></div>
+      <form id="chat-form" class="composer">
+        <label class="mode-switch" for="rag-mode">
+          <input id="rag-mode" type="checkbox" />
+          在线RAG直答（问题向量检索知识库后回答）
+        </label>
+        <textarea id="prompt" rows="3" placeholder="请输入您的问题..." required></textarea>
+        <div class="composer-actions">
+          <button id="send-btn" type="submit">发送</button>
+          <button id="stop-btn" type="button" disabled>停止</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="grid-panels">
+      <section class="panel">
+        <h2>知识库上传</h2>
+        <div class="upload-row">
+          <button id="pick-file-btn" type="button">选择 txt 文件</button>
+          <span id="upload-file-name" class="file-name">未选择文件</span>
+        </div>
+        <div class="upload-row">
+          <label for="operator">操作人</label>
+          <input id="operator" type="text" value="web" />
+        </div>
+        <button id="upload-btn" type="button">上传到知识库</button>
+        <p id="upload-result" class="result-text"></p>
+      </section>
+
+      <section class="panel">
+        <h2>知识库生命周期管理</h2>
+        <div class="ops-row">
+          <button id="sync-btn" type="button">同步失效源文件</button>
+        </div>
+
+        <div class="ops-row">
+          <input id="snapshot-tag" type="text" placeholder="快照标签(可选)" />
+          <button id="snapshot-btn" type="button">创建快照</button>
+        </div>
+
+        <div class="ops-row">
+          <input id="rollback-snapshot" type="text" placeholder="快照目录名" />
+          <button id="rollback-btn" type="button">回滚快照</button>
+        </div>
+
+        <pre id="ops-result" class="ops-result"></pre>
+      </section>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,6 +1,10 @@
 @echo off
 setlocal
 
+chcp 65001 >nul
+set "PYTHONIOENCODING=UTF-8"
+set "PYTHONLEGACYWINDOWSSTDIO="
+
 cd /d "%~dp0"
 
 set "PYTHON_EXE="

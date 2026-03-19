@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from datetime import datetime
 
 from utils.path_tools import get_abs_path
@@ -12,19 +13,73 @@ DEFAULT_LOG_FORMAT = logging.Formatter(
 )
 
 
+def _utf8_stream(stream):
+    """
+    Ensure console stream writes in UTF-8; fallback gracefully if wrapping fails.
+    """
+    try:
+        if getattr(stream, "encoding", "").lower() == "utf-8":
+            return stream
+        if hasattr(stream, "buffer"):
+            return open(
+                stream.buffer.fileno(),
+                mode="w",
+                encoding="utf-8",
+                buffering=1,
+                errors="replace",
+                closefd=False,
+            )
+        return open(
+            stream.fileno(),
+            mode="w",
+            encoding="utf-8",
+            buffering=1,
+            errors="replace",
+            closefd=False,
+        )
+    except Exception:
+        return stream
+
+
+def _enable_windows_utf8_console():
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore
+        kernel32.SetConsoleOutputCP(65001)
+        kernel32.SetConsoleCP(65001)
+    except Exception:
+        pass
+
+
+def _reconfigure_std_streams():
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace", newline=None)
+            except Exception:
+                pass
+
+
 def get_logger(
     name: str = "agent-lab",
     console_level: int = logging.INFO,
     file_level: int = logging.DEBUG,
     log_file: str | None = None,
 ) -> logging.Logger:
+    _enable_windows_utf8_console()
+    _reconfigure_std_streams()
+
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
 
     if logger.handlers:
         return logger
 
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(_utf8_stream(sys.stdout))
     console_handler.setLevel(console_level)
     console_handler.setFormatter(DEFAULT_LOG_FORMAT)
     logger.addHandler(console_handler)

@@ -133,7 +133,7 @@ body {
   border: 1px solid var(--line);
   padding: 10px 12px;
   line-height: 1.48;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .msg.user {
@@ -150,14 +150,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.mode-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 14px;
 }
 
 #prompt {
@@ -194,74 +186,12 @@ button:disabled {
   transform: none;
 }
 
-#send-btn,
-#upload-btn,
-#snapshot-btn,
-#rollback-btn,
-#sync-btn {
+#send-btn {
   background: linear-gradient(120deg, var(--brand), #2ca06f);
 }
 
 #stop-btn {
   background: linear-gradient(120deg, #8f2d22, #b55246);
-}
-
-#pick-file-btn {
-  background: linear-gradient(120deg, var(--brand-2), #3f8fbf);
-}
-
-.grid-panels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.upload-row,
-.ops-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.file-name {
-  color: var(--muted);
-  font-size: 13px;
-  word-break: break-all;
-}
-
-input[type="text"] {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font: inherit;
-}
-
-.result-text {
-  color: var(--muted);
-  min-height: 20px;
-}
-
-.result-text.error {
-  color: var(--warn);
-}
-
-.result-text.success {
-  color: var(--ok);
-}
-
-.ops-result {
-  margin: 0;
-  min-height: 92px;
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #f8fbff;
-  padding: 10px;
-  white-space: pre-wrap;
-  color: #20333d;
 }
 
 @media (max-width: 980px) {
@@ -277,10 +207,6 @@ input[type="text"] {
 
   .status-wrap {
     align-items: flex-start;
-  }
-
-  .grid-panels {
-    grid-template-columns: 1fr;
   }
 
   .chat {

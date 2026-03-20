@@ -17,7 +17,7 @@ const sendBtn = document.getElementById("send-btn");
 const stopBtn = document.getElementById("stop-btn");
 
 let activeRequestId = null;
-const streamNodes = new Map();
+const streamStates = new Map();
 
 function setBackendStatus(type, text) {
   backendStatusEl.className = `status-badge ${type}`;
@@ -138,6 +138,212 @@ function appendMessage(role, text) {
   return node;
 }
 
+function renderAnswerLoading(answerEl, label = "模型思考中") {
+  answerEl.classList.add("loading");
+  answerEl.innerHTML = [
+    `<span class="loading-label">${escapeHTML(label)}</span>`,
+    '<span class="loading-dots" aria-hidden="true">',
+    "<span></span><span></span><span></span>",
+    "</span>",
+  ].join("");
+}
+
+function stopAnswerLoading(state) {
+  if (!state || !state.isLoading) {
+    return;
+  }
+
+  state.isLoading = false;
+  state.answerEl.classList.remove("loading");
+  if (!state.hasConclusion) {
+    state.answerEl.innerHTML = "";
+  }
+}
+
+function createAssistantStreamMessage(placeholderText = "处理中...") {
+  const node = document.createElement("div");
+  node.className = "msg assistant rich-assistant";
+
+  const answerEl = document.createElement("div");
+  answerEl.className = "assistant-conclusion";
+  renderAnswerLoading(answerEl, placeholderText || "模型思考中");
+
+  const thoughtsEl = document.createElement("details");
+  thoughtsEl.className = "assistant-thoughts";
+  thoughtsEl.hidden = true;
+
+  const summaryEl = document.createElement("summary");
+  summaryEl.textContent = "查看思考过程";
+  thoughtsEl.appendChild(summaryEl);
+
+  const thoughtBodyEl = document.createElement("div");
+  thoughtBodyEl.className = "assistant-thoughts-body";
+  thoughtsEl.appendChild(thoughtBodyEl);
+
+  node.appendChild(answerEl);
+  node.appendChild(thoughtsEl);
+
+  chatEl.appendChild(node);
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  return {
+    node,
+    answerEl,
+    thoughtsEl,
+    thoughtBodyEl,
+    answerText: placeholderText,
+    hasConclusion: false,
+    thoughtLines: [],
+    pendingBuffer: "",
+    inToolResultBlock: false,
+    isLoading: true,
+  };
+}
+
+function parseToolNames(rawText) {
+  const text = String(rawText || "");
+  const names = [];
+  const regex = /['\"]name['\"]\s*:\s*['\"]([^'\"]+)['\"]/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    const name = String(match[1] || "").trim();
+    if (name && !names.includes(name)) {
+      names.push(name);
+    }
+  }
+
+  return names;
+}
+
+function normalizeThinkLine(state, line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.startsWith("[THINK]")) {
+    return trimmed.replace(/^\[THINK\]\s*/, "");
+  }
+
+  if (trimmed.startsWith("[tool_call]")) {
+    const payload = trimmed.slice("[tool_call]".length).trim();
+    const names = parseToolNames(payload);
+    if (names.length) {
+      return `正在调用工具：${names.join("、")}。`;
+    }
+    return "正在调用工具处理请求。";
+  }
+
+  if (trimmed.startsWith("[tool_error]")) {
+    const detail = trimmed.slice("[tool_error]".length).trim();
+    return detail ? `工具调用失败：${detail}` : "工具调用失败。";
+  }
+
+  const resultMatch = trimmed.match(/^\[([^\]]+)\s+result\]/i);
+  if (resultMatch) {
+    state.inToolResultBlock = true;
+    return `已收到工具 ${resultMatch[1]} 的输出，正在整理结论。`;
+  }
+
+  if (/^(Q:|A:)/.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (/<invoke|<\/invoke>|<parameter|<\/parameter>/.test(trimmed)) {
+    return "正在解析工具调用参数。";
+  }
+
+  if (state.inToolResultBlock) {
+    if (/^(结论[:：]|最终答案[:：]|答案[:：]|建议[:：])/.test(trimmed)) {
+      state.inToolResultBlock = false;
+      return "";
+    }
+    return trimmed;
+  }
+
+  return "";
+}
+
+function appendThoughtLine(state, line) {
+  const text = String(line || "").trim();
+  if (!text) {
+    return;
+  }
+
+  stopAnswerLoading(state);
+
+  const lastLine = state.thoughtLines[state.thoughtLines.length - 1];
+  if (lastLine === text) {
+    return;
+  }
+
+  state.thoughtLines.push(text);
+  state.thoughtsEl.hidden = false;
+  state.thoughtBodyEl.innerHTML = state.thoughtLines
+    .map(
+      (item, index) =>
+        `<div class="thought-line">${index + 1}. ${escapeHTML(item)}</div>`,
+    )
+    .join("");
+}
+
+function appendConclusionLine(state, line) {
+  const text = String(line || "");
+  if (!text.trim()) {
+    return;
+  }
+
+  stopAnswerLoading(state);
+
+  if (!state.hasConclusion) {
+    state.answerText = "";
+    state.hasConclusion = true;
+  }
+
+  state.answerText = state.answerText ? `${state.answerText}\n${text}` : text;
+  state.answerEl.innerHTML = renderMarkdown(state.answerText);
+}
+
+function processStreamLine(state, line) {
+  const thinkLine = normalizeThinkLine(state, line);
+  if (thinkLine) {
+    appendThoughtLine(state, thinkLine);
+    return;
+  }
+
+  appendConclusionLine(state, line);
+}
+
+function consumeStreamChunk(state, chunk) {
+  state.pendingBuffer += String(chunk || "");
+  const lines = state.pendingBuffer.split(/\r?\n/);
+  state.pendingBuffer = lines.pop() || "";
+
+  for (const line of lines) {
+    processStreamLine(state, line);
+  }
+}
+
+function flushStreamState(state) {
+  stopAnswerLoading(state);
+
+  const tail = String(state.pendingBuffer || "").trim();
+  if (tail) {
+    processStreamLine(state, tail);
+  }
+  state.pendingBuffer = "";
+
+  if (!state.hasConclusion) {
+    const fallback = state.thoughtLines.length
+      ? "结论：已完成推理，请展开思考过程查看详细步骤。"
+      : "未生成有效结论，请重试或补充问题上下文。";
+    state.answerText = fallback;
+    state.hasConclusion = true;
+    state.answerEl.innerHTML = renderMarkdown(fallback);
+  }
+}
+
 function setChatFormPending(pending) {
   sendBtn.disabled = pending;
   stopBtn.disabled = !pending;
@@ -184,16 +390,22 @@ async function bootstrapBackend() {
 
 if (api) {
   api.onChatChunk(({ requestId, chunk }) => {
-    const node = streamNodes.get(requestId);
-    if (!node) {
+    const state = streamStates.get(requestId);
+    if (!state) {
       return;
     }
-    node.innerHTML += renderMarkdown(chunk);
+
+    consumeStreamChunk(state, chunk);
     chatEl.scrollTop = chatEl.scrollHeight;
   });
 
   api.onChatDone(({ requestId }) => {
-    streamNodes.delete(requestId);
+    const state = streamStates.get(requestId);
+    if (state) {
+      flushStreamState(state);
+      streamStates.delete(requestId);
+    }
+
     if (activeRequestId === requestId) {
       activeRequestId = null;
       setChatFormPending(false);
@@ -202,10 +414,11 @@ if (api) {
   });
 
   api.onChatError(({ requestId, error }) => {
-    const node = streamNodes.get(requestId);
-    if (node) {
-      node.innerHTML += renderMarkdown(`\n\n请求失败: ${error}`);
-      streamNodes.delete(requestId);
+    const state = streamStates.get(requestId);
+    if (state) {
+      appendConclusionLine(state, `请求失败: ${error}`);
+      flushStreamState(state);
+      streamStates.delete(requestId);
     }
 
     if (activeRequestId === requestId) {
@@ -232,17 +445,17 @@ chatFormEl.addEventListener("submit", async (event) => {
 
   appendMessage("user", prompt);
   promptEl.value = "";
-  const assistantNode = appendMessage("assistant", "处理中...");
+  const streamState = createAssistantStreamMessage("处理中...");
   setChatFormPending(true);
 
   try {
     const requestId = getRequestId();
     activeRequestId = requestId;
-    assistantNode.innerHTML = "";
-    streamNodes.set(requestId, assistantNode);
+    streamStates.set(requestId, streamState);
     api.startChatStream(requestId, prompt);
   } catch (error) {
-    assistantNode.innerHTML = renderMarkdown(`请求失败: ${error.message}`);
+    appendConclusionLine(streamState, `请求失败: ${error.message}`);
+    flushStreamState(streamState);
     setChatFormPending(false);
     promptEl.focus();
   }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from typing import Any
 
 from langchain.agents import create_agent
 
@@ -98,6 +99,92 @@ class ReactAgent:
             params[m.group(1).strip()] = m.group(2).strip()
         return tool_name, params
 
+    def _extract_tool_names(self, tool_calls: Any) -> list[str]:
+        names: list[str] = []
+
+        if isinstance(tool_calls, list):
+            for item in tool_calls:
+                name = None
+                if isinstance(item, dict):
+                    name = item.get("name")
+                else:
+                    name = getattr(item, "name", None)
+                    if name is None and hasattr(item, "get"):
+                        try:
+                            name = item.get("name")
+                        except Exception:
+                            name = None
+                if name:
+                    names.append(str(name))
+        else:
+            text = str(tool_calls or "")
+            names.extend(re.findall(r"['\"]name['\"]\s*:\s*['\"]([^'\"]+)['\"]", text))
+
+        unique_names: list[str] = []
+        for name in names:
+            if name not in unique_names:
+                unique_names.append(name)
+        return unique_names
+
+    def _tool_call_summary(self, tool_calls: Any) -> str:
+        names = self._extract_tool_names(tool_calls)
+        if not names:
+            return "[THINK] 正在调用工具处理请求。"
+        return f"[THINK] 正在调用工具：{', '.join(names)}。"
+
+    def _normalize_stream_text(self, text: str) -> str:
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return ""
+
+        if cleaned.startswith("[tool_call]"):
+            payload = cleaned.removeprefix("[tool_call]").strip()
+            return self._tool_call_summary(payload)
+
+        if cleaned.startswith("[tool_error]"):
+            detail = cleaned.removeprefix("[tool_error]").strip()
+            if detail:
+                return f"[THINK] 工具调用失败：{detail}"
+            return "[THINK] 工具调用失败。"
+
+        if re.match(r"^\[[^\]]+\s+result\]", cleaned, re.I):
+            return "[THINK] 已收到工具输出，正在整理结论。"
+
+        if re.match(r"^(Q:|A:)", cleaned):
+            return f"[THINK] {cleaned}"
+
+        return cleaned
+
+    def _summarize_inline_tool_result(self, query: str, tool_name: str, params: dict[str, Any], result: Any) -> str:
+        params_preview = str(params)
+        result_preview = str(result)
+        if len(params_preview) > 600:
+            params_preview = params_preview[:600] + "..."
+        if len(result_preview) > 4000:
+            result_preview = result_preview[:4000] + "..."
+
+        prompt = (
+            "你是通信系统助手。请基于工具输出给出面向用户的最终回答。\n"
+            "请严格遵守：\n"
+            "1) 第一行必须以‘结论：’开头，给出直接答案；\n"
+            "2) 后续补充不超过3条依据或说明；\n"
+            "3) 禁止输出代码、JSON、tool_call、Q:/A:、内部思考。\n\n"
+            f"用户问题：{query}\n"
+            f"工具名称：{tool_name}\n"
+            f"工具参数：{params_preview}\n"
+            f"工具输出：\n{result_preview}"
+        )
+
+        try:
+            response = chat_model.invoke(prompt)
+            content = (getattr(response, "content", None) or str(response)).strip()
+            if content:
+                return content
+        except Exception as exc:
+            logger.error(f"inline tool summarize failed: {exc}")
+
+        return "结论：已完成工具计算，但暂时无法自动整理结论，请展开思考过程查看明细。"
+
     # ---------- streaming entry ----------
     def execute_stream(self, query: str):
         trace_id = uuid.uuid4().hex[:8]
@@ -125,7 +212,7 @@ class ReactAgent:
                 input_dict, stream_mode="values", context={"report": False, "trace_id": trace_id}
             ):
                 latest_message = chunk["messages"][-1]
-                text = (getattr(latest_message, "content", None) or "").strip()
+                text = self._normalize_stream_text((getattr(latest_message, "content", None) or "").strip())
 
                 if not text:
                     reasoning = None
@@ -136,26 +223,53 @@ class ReactAgent:
                     if reasoning:
                         tool_name, params = self._parse_inline_tool(str(reasoning))
                         if tool_name and tool_name in self.inline_tool_names:
+                            tool_start_msg = f"[THINK] 正在调用工具：{tool_name}。"
+                            if tool_start_msg not in sent_contents:
+                                sent_contents.add(tool_start_msg)
+                                logger.debug(f"[react_agent][{trace_id}] chunk len={len(tool_start_msg)}")
+                                yield tool_start_msg + "\n"
+
                             try:
                                 tool_func = self.tools_map[tool_name]
-                                result = tool_func(**params) if params else tool_func()
-                                text = f"[{tool_name} result]\n{result}"
+                                invoke_args = params or {}
+                                if hasattr(tool_func, "invoke"):
+                                    result = tool_func.invoke(invoke_args)
+                                elif callable(tool_func):
+                                    result = tool_func(**invoke_args) if invoke_args else tool_func()
+                                else:
+                                    raise RuntimeError(f"tool {tool_name} is not invokable")
+
+                                tool_done_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
+                                if tool_done_msg not in sent_contents:
+                                    sent_contents.add(tool_done_msg)
+                                    logger.debug(f"[react_agent][{trace_id}] chunk len={len(tool_done_msg)}")
+                                    yield tool_done_msg + "\n"
+
+                                final_text = self._summarize_inline_tool_result(
+                                    query=query,
+                                    tool_name=tool_name,
+                                    params=invoke_args,
+                                    result=result,
+                                )
+                                final_text = self._normalize_stream_text(final_text)
+                                if final_text and final_text not in sent_contents:
+                                    sent_contents.add(final_text)
+                                    logger.debug(f"[react_agent][{trace_id}] chunk len={len(final_text)}")
+                                    yield final_text + "\n"
+                                return
                             except Exception as tool_exc:
                                 logger.error(f"[react_agent][{trace_id}] inline tool {tool_name} failed: {tool_exc}")
-                                text = f"[tool_error] {tool_name}: {tool_exc}"
+                                text = f"[THINK] 工具 {tool_name} 执行失败：{tool_exc}"
                         if not text:
-                            text = str(reasoning).strip()
+                            text = "[THINK] 正在分析问题并整理答案。"
 
                 if not text:
                     tool_calls = getattr(latest_message, "tool_calls", None)
                     if tool_calls:
-                        text = f"[tool_call] {tool_calls}"
+                        text = self._tool_call_summary(tool_calls)
 
                 if not text:
-                    if isinstance(latest_message, dict):
-                        text = str(latest_message)
-                    else:
-                        text = str(latest_message)
+                    continue
 
                 if not text or text in sent_contents:
                     logger.debug(f"[react_agent][{trace_id}] skip duplicate/empty chunk")

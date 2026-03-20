@@ -1,28 +1,20 @@
 from __future__ import annotations
 
-import uuid
 import re
-from langchain.agents import create_agent
-from utils.log import logger
+import uuid
 
-from agent.tools.agent_tools import (
-    fetch_external_data,
-    fill_context_for_report,
-    matlab,
-    python,
-    rag_summarize,
-    search_memory,
-    store_memory,
-    web_search,
-)
-from agent.tools.middleware import (
+from langchain.agents import create_agent
+
+from agent.middleware import (
     log_after_model,
     log_before_model,
     log_model_call,
     monitor_tool,
     report_prompt_switch,
 )
+from agent.tools.registry import get_registered_tool_map, register_tools
 from model.factory import chat_model
+from utils.log import logger
 from utils.prompt_loader import load_system_prompt
 
 
@@ -35,18 +27,11 @@ class ReactAgent:
     """
 
     def __init__(self) -> None:
+        self.tools_map = get_registered_tool_map()
+        self.inline_tool_names = set(self.tools_map.keys())
         self.agent = create_agent(
             model=chat_model,
-            tools=[
-                rag_summarize,
-                web_search,
-                fill_context_for_report,
-                fetch_external_data,
-                python,
-                matlab,
-                store_memory,
-                search_memory,
-            ],
+            tools=register_tools(),
             system_prompt=load_system_prompt(),
             middleware=[
                 monitor_tool,
@@ -141,7 +126,7 @@ class ReactAgent:
             ):
                 latest_message = chunk["messages"][-1]
                 text = (getattr(latest_message, "content", None) or "").strip()
-               
+
                 if not text:
                     reasoning = None
                     try:
@@ -150,28 +135,10 @@ class ReactAgent:
                         pass
                     if reasoning:
                         tool_name, params = self._parse_inline_tool(str(reasoning))
-                        if tool_name and tool_name in {
-                            "rag_summarize",
-                            "web_search",
-                            "fill_context_for_report",
-                            "fetch_external_data",
-                            "python",
-                            "matlab",
-                            "store_memory",
-                            "search_memory",
-                        }:
-                            tools_map = {
-                                "rag_summarize": rag_summarize,
-                                "web_search": web_search,
-                                "fill_context_for_report": fill_context_for_report,
-                                "fetch_external_data": fetch_external_data,
-                                "python": python,
-                                "matlab": matlab,
-                                "store_memory": store_memory,
-                                "search_memory": search_memory,
-                            }
+                        if tool_name and tool_name in self.inline_tool_names:
                             try:
-                                result = tools_map[tool_name](**params) if params else tools_map[tool_name]()
+                                tool_func = self.tools_map[tool_name]
+                                result = tool_func(**params) if params else tool_func()
                                 text = f"[{tool_name} result]\n{result}"
                             except Exception as tool_exc:
                                 logger.error(f"[react_agent][{trace_id}] inline tool {tool_name} failed: {tool_exc}")

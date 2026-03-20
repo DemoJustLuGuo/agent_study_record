@@ -108,6 +108,82 @@ body {
   font-size: 18px;
 }
 
+.connection-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.connection-head {
+  display: grid;
+  gap: 4px;
+}
+
+.connection-head h2 {
+  margin: 0;
+}
+
+.connection-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.connection-grid {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.connection-grid label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.connection-grid input[type="text"],
+.connection-grid input[type="password"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+.inline-toggle {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.inline-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.conn-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.conn-hint.ok {
+  color: var(--ok);
+}
+
+.conn-hint.error {
+  color: var(--warn);
+}
+
 .chat-panel {
   display: grid;
   grid-template-rows: 1fr auto;
@@ -190,8 +266,16 @@ button:disabled {
   background: linear-gradient(120deg, var(--brand), #2ca06f);
 }
 
+#save-conn-btn {
+  background: linear-gradient(120deg, var(--brand-2), #1984c7);
+}
+
 #stop-btn {
   background: linear-gradient(120deg, #8f2d22, #b55246);
+}
+
+.btn-secondary {
+  background: linear-gradient(120deg, #66757e, #8a99a3);
 }
 
 @media (max-width: 980px) {
@@ -211,5 +295,9 @@ button:disabled {
 
   .chat {
     min-height: 42vh;
+  }
+
+  .connection-grid {
+    grid-template-columns: 1fr;
   }
 }

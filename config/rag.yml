@@ -1,5 +1,1 @@
-chat_model_name: Pro/MiniMaxAI/MiniMax-M2.5 #模型选择，我这里用的是硅基流动提供的模型
-
-embedding_model_name: Qwen/Qwen3-Embedding-8B #向量模型选择
-
-SILICONFLOW_API_KEY: SILICONFLOW_API_KEY #硅基流动的API KEY，替换成你自己的
+external_data_path: data/external/records.csv

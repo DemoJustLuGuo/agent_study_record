@@ -4,9 +4,10 @@ PyYAML==6.0.3
 langchain==1.2.11
 langchain-core==1.2.18
 langchain-community==0.4.1
+langchain-openai
+langchain-experimental
 langchain-text-splitters==1.1.1
 langchain-chroma==1.1.0
 langgraph==1.1.0
-langchain-siliconflow==1.0.0
 chromadb==1.5.5
 pypdf==6.9.0

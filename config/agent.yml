@@ -1,1 +1,9 @@
-external_data_path: data/external/records.csv
+chat_model_name: Pro/MiniMaxAI/MiniMax-M2.5 # 聊天模型名称
+
+embedding_model_name: Qwen/Qwen3-Embedding-8B # 向量模型名称
+
+openai_base_url: https://api.siliconflow.cn/v1 # OpenAI 兼容 API 地址
+
+OPENAI_API_KEY: SILICONFLOW_API_KEY # API Key 环境变量名（或直接填写密钥）
+
+chat_temperature: 0.3 # 对话温度

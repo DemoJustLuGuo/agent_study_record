@@ -100,8 +100,8 @@ def _write_trace(runtime: Runtime | None, event: str, **payload: Any) -> None:
     }
     path = os.path.join(TRACE_DIR, f"{trace_id}.jsonl")
     try:
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        with open(path, "a", encoding="utf-8") as file_obj:
+            file_obj.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception as exc:  # pragma: no cover
         logger.debug(f"{_log_prefix(runtime)}trace file write failed: {exc}")
 

@@ -15,7 +15,10 @@ function bindEvent(channel, callback) {
 contextBridge.exposeInMainWorld("electronAPI", {
   getAppInfo: () => ipcRenderer.invoke("app:get-info"),
   health: () => ipcRenderer.invoke("backend:health"),
-  ensureBackendStarted: () => ipcRenderer.invoke("backend:ensure-started"),
+  ensureBackendStarted: (options = {}) =>
+    ipcRenderer.invoke("backend:ensure-started", options),
+  updateConnection: (backendUrl, apiKey) =>
+    ipcRenderer.invoke("backend:update-connection", { backendUrl, apiKey }),
 
   queryRag: (prompt) => ipcRenderer.invoke("backend:rag-query", prompt),
   startChatStream: (requestId, prompt) =>

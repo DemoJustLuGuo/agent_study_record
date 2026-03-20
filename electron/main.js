@@ -6,7 +6,7 @@ const { pathToFileURL } = require("url");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const RENDERER_ENTRY = path.join(__dirname, "renderer", "index.html");
-const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:7860").trim();
+const DEFAULT_BACKEND_URL = "http://127.0.0.1:7860";
 const BACKEND_STARTUP_TIMEOUT_MS = Number(
   process.env.BACKEND_STARTUP_TIMEOUT_MS || 45000,
 );
@@ -15,6 +15,10 @@ let mainWindow = null;
 let backendProcess = null;
 let backendManagedByElectron = false;
 const chatAbortControllers = new Map();
+let runtimeBackendUrl = "";
+let runtimeApiKey = String(
+  process.env.OPENAI_API_KEY || process.env.SILICONFLOW_API_KEY || "",
+).trim();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -31,6 +35,64 @@ function normalizeError(error) {
     return String(error.message);
   }
   return String(error);
+}
+
+function normalizeBackendUrl(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) {
+    return DEFAULT_BACKEND_URL;
+  }
+
+  const noTrailingSlash = trimmed.replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(noTrailingSlash)) {
+    return `http://${noTrailingSlash}`;
+  }
+  return noTrailingSlash;
+}
+
+function getBackendUrl() {
+  if (!runtimeBackendUrl) {
+    runtimeBackendUrl = normalizeBackendUrl(
+      process.env.BACKEND_URL || DEFAULT_BACKEND_URL,
+    );
+  }
+  return runtimeBackendUrl;
+}
+
+function buildBackendEnv() {
+  const env = { ...process.env, BACKEND_URL: getBackendUrl() };
+  if (runtimeApiKey) {
+    env.OPENAI_API_KEY = runtimeApiKey;
+    if (!env.SILICONFLOW_API_KEY) {
+      env.SILICONFLOW_API_KEY = runtimeApiKey;
+    }
+  }
+  return env;
+}
+
+function stopManagedBackend() {
+  return new Promise((resolve) => {
+    if (!backendProcess || !backendManagedByElectron || backendProcess.killed) {
+      resolve();
+      return;
+    }
+
+    const processRef = backendProcess;
+    let settled = false;
+    const done = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      backendProcess = null;
+      backendManagedByElectron = false;
+      resolve();
+    };
+
+    processRef.once("exit", done);
+    processRef.kill();
+    setTimeout(done, 3000);
+  });
 }
 
 function loadDotEnv() {
@@ -91,7 +153,7 @@ function resolvePythonExecutable() {
 
 async function checkBackendHealth() {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/health`);
+    const response = await fetch(`${getBackendUrl()}/api/health`);
     if (!response.ok) {
       return false;
     }
@@ -113,9 +175,15 @@ async function waitBackendReady(timeoutMs) {
   return false;
 }
 
-async function ensureBackendStarted() {
-  if (await checkBackendHealth()) {
-    return { ok: true, startedByElectron: false, backendUrl: BACKEND_URL };
+async function ensureBackendStarted(options = {}) {
+  const forceRestart = Boolean(options?.forceRestart);
+
+  if (forceRestart) {
+    await stopManagedBackend();
+  }
+
+  if (!forceRestart && (await checkBackendHealth())) {
+    return { ok: true, startedByElectron: false, backendUrl: getBackendUrl() };
   }
 
   if (backendProcess && !backendProcess.killed) {
@@ -124,12 +192,12 @@ async function ensureBackendStarted() {
       return {
         ok: true,
         startedByElectron: backendManagedByElectron,
-        backendUrl: BACKEND_URL,
+        backendUrl: getBackendUrl(),
       };
     }
     return {
       ok: false,
-      error: "后端启动超时，请检查 Python 环境与 SILICONFLOW_API_KEY 配置。",
+      error: "后端启动超时，请检查 Python 环境与 OPENAI_API_KEY 配置。",
     };
   }
 
@@ -139,7 +207,7 @@ async function ensureBackendStarted() {
   try {
     backendProcess = spawn(pythonExe, ["-m", "app.main"], {
       cwd: PROJECT_ROOT,
-      env: { ...process.env },
+      env: buildBackendEnv(),
       windowsHide: true,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -174,7 +242,7 @@ async function ensureBackendStarted() {
     return { ok: false, error: "后端启动超时，请检查 Python 环境与配置。" };
   }
 
-  return { ok: true, startedByElectron: true, backendUrl: BACKEND_URL };
+  return { ok: true, startedByElectron: true, backendUrl: getBackendUrl() };
 }
 
 async function parseResponse(response) {
@@ -189,7 +257,7 @@ async function parseResponse(response) {
 }
 
 async function requestJson(pathname, init) {
-  const response = await fetch(`${BACKEND_URL}${pathname}`, init);
+  const response = await fetch(`${getBackendUrl()}${pathname}`, init);
   const payload = await parseResponse(response);
 
   if (!response.ok) {
@@ -238,7 +306,27 @@ ipcMain.handle("app:get-info", () => {
     name: app.getName(),
     version: app.getVersion(),
     platform: process.platform,
-    backendUrl: BACKEND_URL,
+    backendUrl: getBackendUrl(),
+  };
+});
+
+ipcMain.handle("backend:update-connection", async (_event, payload) => {
+  const hasBackendUrl =
+    payload && Object.prototype.hasOwnProperty.call(payload, "backendUrl");
+  const hasApiKey =
+    payload && Object.prototype.hasOwnProperty.call(payload, "apiKey");
+
+  if (hasBackendUrl) {
+    runtimeBackendUrl = normalizeBackendUrl(payload.backendUrl);
+  }
+  if (hasApiKey) {
+    runtimeApiKey = String(payload.apiKey || "").trim();
+  }
+
+  return {
+    ok: true,
+    backendUrl: getBackendUrl(),
+    hasApiKey: Boolean(runtimeApiKey),
   };
 });
 
@@ -247,8 +335,8 @@ ipcMain.handle("backend:health", async () => {
   return { healthy };
 });
 
-ipcMain.handle("backend:ensure-started", async () => {
-  return ensureBackendStarted();
+ipcMain.handle("backend:ensure-started", async (_event, options) => {
+  return ensureBackendStarted(options || {});
 });
 
 ipcMain.handle("backend:rag-query", async (_event, prompt) => {
@@ -361,7 +449,7 @@ ipcMain.on("backend:chat-stream:start", async (event, payload) => {
   chatAbortControllers.set(requestId, controller);
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/chat`, {
+    const response = await fetch(`${getBackendUrl()}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),

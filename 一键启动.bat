@@ -41,22 +41,32 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if "%SILICONFLOW_API_KEY%"=="" if exist ".env" (
+if "%OPENAI_API_KEY%"=="" if not "%SILICONFLOW_API_KEY%"=="" set "OPENAI_API_KEY=%SILICONFLOW_API_KEY%"
+
+if "%OPENAI_API_KEY%"=="" if exist ".env" (
     for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
-        if /I "%%A"=="SILICONFLOW_API_KEY" set "SILICONFLOW_API_KEY=%%B"
+        if /I "%%A"=="OPENAI_API_KEY" set "OPENAI_API_KEY=%%B"
     )
 )
 
-if "%SILICONFLOW_API_KEY%"=="" (
-    echo [WARN] SILICONFLOW_API_KEY is not set.
-    set /p SILICONFLOW_API_KEY=Please input SiliconFlow API key [sk-...]: 
+if "%OPENAI_API_KEY%"=="" if exist ".env" (
+    for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
+        if /I "%%A"=="SILICONFLOW_API_KEY" set "OPENAI_API_KEY=%%B"
+    )
 )
 
-if "%SILICONFLOW_API_KEY%"=="" (
-    echo [ERROR] SILICONFLOW_API_KEY is required.
+if "%OPENAI_API_KEY%"=="" (
+    echo [WARN] OPENAI_API_KEY is not set.
+    set /p OPENAI_API_KEY=Please input OpenAI-compatible API key [sk-...]: 
+)
+
+if "%OPENAI_API_KEY%"=="" (
+    echo [ERROR] OPENAI_API_KEY is required.
     pause
     exit /b 1
 )
+
+if "%SILICONFLOW_API_KEY%"=="" set "SILICONFLOW_API_KEY=%OPENAI_API_KEY%"
 
 if "%APP_HOST%"=="" set "APP_HOST=127.0.0.1"
 if "%APP_PORT%"=="" set "APP_PORT=7860"

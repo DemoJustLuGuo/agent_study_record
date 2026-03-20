@@ -19,6 +19,42 @@
       </div>
     </header>
 
+    <section class="panel connection-panel">
+      <div class="connection-head">
+        <h2>连接设置</h2>
+        <p class="connection-subtitle">API 地址与密钥会保存在本地前端，下次打开可直接复用。</p>
+      </div>
+
+      <div class="connection-grid">
+        <label for="api-url-input">API 地址</label>
+        <input
+          id="api-url-input"
+          type="text"
+          placeholder="http://127.0.0.1:7860"
+          autocomplete="off"
+        />
+
+        <label for="api-key-input">API 密钥</label>
+        <input
+          id="api-key-input"
+          type="password"
+          placeholder="sk-..."
+          autocomplete="off"
+        />
+
+        <label for="show-api-key" class="inline-toggle">
+          <input id="show-api-key" type="checkbox" />
+          显示密钥
+        </label>
+      </div>
+
+      <div class="connection-actions">
+        <button id="save-conn-btn" type="button">保存并连接</button>
+        <button id="clear-conn-btn" type="button" class="btn-secondary">清空设置</button>
+        <span id="conn-hint" class="conn-hint" aria-live="polite"></span>
+      </div>
+    </section>
+
     <section class="panel chat-panel">
       <div id="chat" class="chat" aria-live="polite"></div>
       <form id="chat-form" class="composer">

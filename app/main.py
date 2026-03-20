@@ -3,7 +3,7 @@ from threading import Lock
 
 from flask import Flask, Response, jsonify, request, stream_with_context
 
-from agent.tools.react_agent import ReactAgent
+from agent.react_agent import ReactAgent
 from rag.knowledge_base import KnowledgeBaseService
 from rag.rag_service import RAGSummarizeService
 

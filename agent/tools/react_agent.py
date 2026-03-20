@@ -141,8 +141,7 @@ class ReactAgent:
             ):
                 latest_message = chunk["messages"][-1]
                 text = (getattr(latest_message, "content", None) or "").strip()
-
-                # Fallbacks when model puts text into reasoning_content / tool_calls
+               
                 if not text:
                     reasoning = None
                     try:
@@ -150,7 +149,6 @@ class ReactAgent:
                     except Exception:
                         pass
                     if reasoning:
-                        # try to execute inline tool call if present (Minimax style)
                         tool_name, params = self._parse_inline_tool(str(reasoning))
                         if tool_name and tool_name in {
                             "rag_summarize",

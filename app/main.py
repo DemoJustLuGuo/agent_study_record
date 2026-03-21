@@ -17,6 +17,22 @@ knowledge_base_lock = Lock()
 rag_service = None
 rag_service_lock = Lock()
 
+def _load_app_css() -> str:
+    css_path = Path(__file__).with_name("ui.css")
+    try:
+        return css_path.read_text(encoding="utf-8")
+    except Exception:
+        # UI stylesheet is optional; failing to read should not break the app.
+        return ""
+
+THINKING_HTML = (
+    '<div class="thinking-indicator">'
+    '<span class="dot"></span>'
+    '<span class="dot"></span>'
+    '<span class="dot"></span>'
+    "</div>"
+)
+
 
 def get_agent() -> ReactAgent:
     global agent
@@ -65,6 +81,19 @@ def _render_references(references: list[dict[str, Any]]) -> list[dict[str, Any]]
     return rendered
 
 
+def _references_to_markdown(references: list[dict[str, Any]]) -> str:
+    if not references:
+        return "> 暂无匹配的参考片段。"
+    lines = ["### 📚 命中参考片段\n"]
+    for i, item in enumerate(references, 1):
+        content = item.get("content", "").strip()
+        metadata = item.get("metadata", {})
+        source = metadata.get("source", "未知来源")
+        lines.append(f"**[{i}]** `{source}`\n")
+        lines.append(f"> {content}\n")
+    return "\n".join(lines)
+
+
 def stream_agent_reply(message: str, history: list[dict[str, str]]):
     prompt = (message or "").strip()
     if not prompt:
@@ -72,26 +101,45 @@ def stream_agent_reply(message: str, history: list[dict[str, str]]):
         return
 
     chunks: list[str] = []
+    thinking_shown = False
+
     try:
         runtime_agent = get_agent()
         for chunk in runtime_agent.execute_stream(prompt):
+            text = chunk.strip()
+            if not text:
+                continue
+
             chunks.append(chunk)
-            yield "".join(chunks)
+
+            # 所有 chunk 都是 [THINK] 前缀时 → 仍在思考阶段，显示加载动画
+            all_thinking = all(
+                c.strip().startswith("[THINK]") for c in chunks if c.strip()
+            )
+
+            if all_thinking:
+                thinking_shown = True
+                yield f"{THINKING_HTML}\n\n**▌ 思考中...**\n\n" + "".join(chunks)
+            else:
+                yield "".join(chunks)
     except Exception:
-        yield "系统错误：智能体处理失败，请稍后重试。"
+        yield "⚠️ 系统错误：智能体处理失败，请稍后重试。"
 
 
 def rag_query(prompt: str):
     query = (prompt or "").strip()
     if not query:
-        return "请输入问题。", []
+        return "请输入问题。", ""
 
     try:
         result = get_rag_service().answer_with_references(query)
     except Exception:
-        return "系统错误：RAG 查询失败，请稍后重试。", []
+        return "⚠️ 系统错误：RAG 查询失败，请稍后重试。", ""
 
-    return result.get("answer", ""), _render_references(result.get("references", []))
+    answer = result.get("answer", "")
+    references = _render_references(result.get("references", []))
+    refs_md = _references_to_markdown(references)
+    return answer, refs_md
 
 
 def upload_knowledge(file_path: str, operator: str):
@@ -114,11 +162,13 @@ def upload_knowledge(file_path: str, operator: str):
 
     user = (operator or "gradio").strip() or "gradio"
     try:
-        result = get_knowledge_base_service().upload_by_str(text, source.name, operator=user)
+        result = get_knowledge_base_service().upload_by_str(
+            text, source.name, operator=user
+        )
     except Exception:
         return "系统错误：知识写入失败。"
 
-    return f"上传完成：{result}"
+    return f"✅ {result}"
 
 
 def sync_knowledge():
@@ -152,36 +202,136 @@ def rollback_snapshot(snapshot_name: str):
 
 
 def build_app() -> gr.Blocks:
-    with gr.Blocks(title="通信智能体工作台") as demo:
-        gr.Markdown("# 通信智能体工作台")
-        gr.Markdown("基于 Gradio 的统一入口：Agent 对话、在线 RAG、知识库管理。")
+    with gr.Blocks(
+        title="通信智能体工作台", css=_load_app_css(), theme=gr.themes.Base()
+    ) as demo:
+        # ===== Header =====
+        gr.HTML(
+            '<div class="header-bar">'
+            '<div class="header-title-wrap">'
+            '<h1>📡 通信智能体工作台 </h1>'
+            '<div class="header-subtitle">LangChain ReAct Agent · RAG 检索增强 · ChromaDB 知识底座</div>'
+            "</div>"
+            '<span class="status-badge online">在线运行</span>'
+            "</div>"
+        )
 
+        # ===== Main Tabs =====
         with gr.Tabs():
-            with gr.TabItem("智能体对话"):
+            # ===== Tab 1: Agent Chat =====
+            with gr.TabItem("💬 智能体对话"):
+                gr.Markdown(
+                    "支持 Markdown 输出：标题、代码块、表格、引用和链接都会自动渲染。",
+                    elem_classes=["markdown-body"],
+                )
                 gr.ChatInterface(
                     fn=stream_agent_reply,
                     type="messages",
-                    title="Agent Chat",
-                    description="直接对接 ReactAgent.execute_stream()，支持流式回答。",
-                    textbox=gr.Textbox(placeholder="请输入通信系统问题...", lines=3),
+                    title="",
+                    description="",
+                    chatbot=gr.Chatbot(
+                        type="messages",
+                        label="对话",
+                        height=520,
+                        show_label=False,
+                        layout="bubble",
+                        bubble_full_width=False,
+                        avatar_images=(None, None),
+                        render_markdown=True,
+                        sanitize_html=True,
+                        show_copy_button=True,
+                        show_copy_all_button=True,
+                        line_breaks=True,
+                        placeholder="👋 你好！我是通信领域工程智能体，请输入你的问题。",
+                    ),
+                    textbox=gr.Textbox(
+                        placeholder="请输入通信系统问题...（如：解释 OFDM 原理）",
+                        lines=1,
+                        max_lines=5,
+                        show_label=False,
+                        container=False,
+                        autofocus=True,
+                        submit_btn="发送",
+                        stop_btn="停止",
+                        html_attributes={"enterkeyhint": "send"},
+                    ),
                     examples=[
                         "解释 OFDM 的基本原理，并给出与单载波系统的差异。",
                         "用 Python 估算 BPSK 在 AWGN 下 BER 随 Eb/N0 的变化趋势。",
+                        "LTE 切换失败的常见原因有哪些？",
+                        "5G NR 的峰值速率如何计算？",
                     ],
                 )
 
-            with gr.TabItem("在线 RAG 直答"):
-                rag_input = gr.Textbox(label="问题", placeholder="输入需要检索知识库的问题", lines=3)
-                rag_btn = gr.Button("检索并回答", variant="primary")
-                rag_answer = gr.Markdown(label="回答")
-                rag_refs = gr.JSON(label="命中片段（已脱敏）")
-                rag_btn.click(fn=rag_query, inputs=[rag_input], outputs=[rag_answer, rag_refs], api_name="rag_query")
+            # ===== Tab 2: RAG Query =====
+            with gr.TabItem("🔍 在线 RAG"):
+                with gr.Row(equal_height=False):
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 📖 知识库检索")
+                        gr.Markdown("直接向知识库提问，基于向量相似度检索并生成回答。")
+                        rag_input = gr.Textbox(
+                            label="问题",
+                            placeholder="输入需要检索知识库的问题",
+                            lines=3,
+                            show_label=False,
+                        )
+                        rag_btn = gr.Button(
+                            "🚀 检索并回答", variant="primary", size="lg"
+                        )
 
-            with gr.TabItem("知识库管理"):
-                upload_file = gr.File(label="上传文本", file_types=[".txt"], type="filepath")
-                operator = gr.Textbox(label="操作人", value="gradio")
-                upload_btn = gr.Button("上传入库", variant="primary")
-                upload_result = gr.Textbox(label="上传结果", interactive=False)
+                    with gr.Column(scale=2):
+                        rag_answer = gr.Markdown(
+                            label="回答",
+                            show_label=True,
+                            container=True,
+                            elem_classes=["markdown-body"],
+                        )
+                        rag_refs = gr.Markdown(
+                            label="命中参考片段",
+                            show_label=True,
+                            container=True,
+                            elem_classes=["markdown-body"],
+                        )
+
+                rag_btn.click(
+                    fn=rag_query,
+                    inputs=[rag_input],
+                    outputs=[rag_answer, rag_refs],
+                    api_name="rag_query",
+                )
+
+            # ===== Tab 3: Knowledge Base =====
+            with gr.TabItem("📦 知识库管理"):
+                # Upload Section
+                with gr.Group():
+                    gr.Markdown("### 📤 上传知识文件")
+                    with gr.Row():
+                        with gr.Column(scale=3):
+                            upload_file = gr.File(
+                                label="选择文件",
+                                file_types=[".txt"],
+                                type="filepath",
+                                container=False,
+                            )
+                        with gr.Column(scale=1):
+                            operator = gr.Textbox(
+                                label="操作人",
+                                value="gradio",
+                                container=False,
+                            )
+                        with gr.Column(scale=1):
+                            upload_btn = gr.Button(
+                                "📤 上传入库",
+                                variant="primary",
+                                size="lg",
+                            )
+                    upload_result = gr.Textbox(
+                        label="上传结果",
+                        interactive=False,
+                        show_label=False,
+                        container=False,
+                    )
+
                 upload_btn.click(
                     fn=upload_knowledge,
                     inputs=[upload_file, operator],
@@ -189,33 +339,85 @@ def build_app() -> gr.Blocks:
                     api_name="knowledge_upload",
                 )
 
-                gr.Markdown("### 生命周期运维")
-                with gr.Row():
-                    sync_btn = gr.Button("同步失效源文件")
-                    sync_result = gr.JSON(label="同步结果")
-                sync_btn.click(fn=sync_knowledge, inputs=None, outputs=[sync_result], api_name="knowledge_sync")
+                gr.HTML('<div class="section-divider"></div>')
 
-                with gr.Row():
-                    snapshot_tag = gr.Textbox(label="快照标签", placeholder="可选")
-                    snapshot_btn = gr.Button("创建快照")
-                    snapshot_result = gr.JSON(label="快照结果")
+                # Lifecycle Section
+                with gr.Group():
+                    gr.Markdown("### ⚙️ 生命周期运维")
+                    gr.Markdown("管理向量数据库的快照、同步与回滚。")
+
+                    with gr.Row(equal_height=True):
+                        # Sync Card
+                        with gr.Column():
+                            with gr.Group(elem_classes=["card"]):
+                                gr.Markdown("#### 🔄 同步清理")
+                                gr.Markdown("删除已移除源文件对应的向量数据。")
+                                sync_btn = gr.Button(
+                                    "🔄 同步失效源文件",
+                                    variant="secondary",
+                                    size="lg",
+                                )
+                                sync_result = gr.JSON(label="同步结果")
+
+                        # Snapshot Card
+                        with gr.Column():
+                            with gr.Group(elem_classes=["card"]):
+                                gr.Markdown("📸 创建快照")
+                                gr.Markdown("为当前向量库状态创建可回滚的快照。")
+                                snapshot_tag = gr.Textbox(
+                                    label="快照标签",
+                                    placeholder="可选，如 release_v1",
+                                    show_label=False,
+                                )
+                                snapshot_btn = gr.Button(
+                                    "📸 创建快照",
+                                    variant="secondary",
+                                    size="lg",
+                                )
+                                snapshot_result = gr.JSON(label="快照结果")
+
+                        # Rollback Card
+                        with gr.Column():
+                            with gr.Group(elem_classes=["card"]):
+                                gr.Markdown("⏪ 回滚快照")
+                                gr.Markdown("将向量库恢复到指定快照状态。")
+                                rollback_name = gr.Textbox(
+                                    label="快照名称",
+                                    placeholder="必填，如 20260321_120000",
+                                    show_label=False,
+                                )
+                                rollback_btn = gr.Button(
+                                    "⏪ 回滚快照",
+                                    variant="stop",
+                                    size="lg",
+                                )
+                                rollback_result = gr.JSON(label="回滚结果")
+
+                sync_btn.click(
+                    fn=sync_knowledge,
+                    inputs=None,
+                    outputs=[sync_result],
+                    api_name="knowledge_sync",
+                )
                 snapshot_btn.click(
                     fn=create_snapshot,
                     inputs=[snapshot_tag],
                     outputs=[snapshot_result],
                     api_name="knowledge_snapshot",
                 )
-
-                with gr.Row():
-                    rollback_name = gr.Textbox(label="快照名称", placeholder="必填，例如 20260321_120000_release")
-                    rollback_btn = gr.Button("回滚快照", variant="stop")
-                    rollback_result = gr.JSON(label="回滚结果")
                 rollback_btn.click(
                     fn=rollback_snapshot,
                     inputs=[rollback_name],
                     outputs=[rollback_result],
                     api_name="knowledge_rollback",
                 )
+
+        # ===== Footer =====
+        gr.HTML(
+            '<div style="text-align:center; padding:16px; color:var(--text-muted); font-size:0.8rem;">'
+            "Powered by LangChain · LangGraph · Gradio · ChromaDB"
+            "</div>"
+        )
 
     return demo
 

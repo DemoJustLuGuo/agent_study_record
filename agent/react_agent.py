@@ -46,8 +46,33 @@ class ReactAgent:
     # ---------- routing & planning ----------
     def _route_strategy(self, query: str) -> str:
         q = (query or "").lower()
-        math_kw = ["计算", "评估", "大小", "比例", "率", "%", "数值", "方程", "概率", "可能性", "公式", "结果是多少"]
-        info_kw = ["什么", "介绍", "解释", "原理", "历史", "文献", "资料", "参考", "知识", "信息", "定义"]
+        math_kw = [
+            "计算",
+            "评估",
+            "大小",
+            "比例",
+            "率",
+            "%",
+            "数值",
+            "方程",
+            "概率",
+            "可能性",
+            "公式",
+            "结果是多少",
+        ]
+        info_kw = [
+            "什么",
+            "介绍",
+            "解释",
+            "原理",
+            "历史",
+            "文献",
+            "资料",
+            "参考",
+            "知识",
+            "信息",
+            "定义",
+        ]
         has_math = any(k in q for k in math_kw)
         has_info = any(k in q for k in info_kw)
         if has_math and not has_info:
@@ -69,7 +94,19 @@ class ReactAgent:
         q = (query or "").strip()
         if len(q) >= 80:
             return True
-        keywords = ["并且", "以及", "同时", "多个", "多步", "计划", "规划", "拆解", "步骤", "综合", "复杂"]
+        keywords = [
+            "并且",
+            "以及",
+            "同时",
+            "多个",
+            "多步",
+            "计划",
+            "规划",
+            "拆解",
+            "步骤",
+            "综合",
+            "复杂",
+        ]
         return any(k in q for k in keywords)
 
     def _generate_plan(self, query: str) -> str:
@@ -89,13 +126,17 @@ class ReactAgent:
         """
         if not reasoning:
             return None, None
-        invoke_match = re.search(r'<invoke name="([^"]+)">(.+?)</invoke>', reasoning, re.S | re.I)
+        invoke_match = re.search(
+            r'<invoke name="([^"]+)">(.+?)</invoke>', reasoning, re.S | re.I
+        )
         if not invoke_match:
             return None, None
         tool_name = invoke_match.group(1).strip()
         body = invoke_match.group(2)
         params = {}
-        for m in re.finditer(r'<parameter name="([^"]+)">(.*?)</parameter>', body, re.S | re.I):
+        for m in re.finditer(
+            r'<parameter name="([^"]+)">(.*?)</parameter>', body, re.S | re.I
+        ):
             params[m.group(1).strip()] = m.group(2).strip()
         return tool_name, params
 
@@ -155,7 +196,9 @@ class ReactAgent:
 
         return cleaned
 
-    def _summarize_inline_tool_result(self, query: str, tool_name: str, params: dict[str, Any], result: Any) -> str:
+    def _summarize_inline_tool_result(
+        self, query: str, tool_name: str, params: dict[str, Any], result: Any
+    ) -> str:
         params_preview = str(params)
         result_preview = str(result)
         if len(params_preview) > 600:
@@ -201,82 +244,148 @@ class ReactAgent:
         # 2) 复杂请求 -> 任务拆解
         if self._needs_planning(query):
             plan_text = self._generate_plan(query)
-            planning_msg = f"任务规划：\n{plan_text}\n请按以上步骤逐步完成，并在结束时总结结果。"
+            planning_msg = (
+                f"任务规划：\n{plan_text}\n请按以上步骤逐步完成，并在结束时总结结果。"
+            )
             # 仅记录日志，不输出到前端
             logger.debug(f"[react_agent][{trace_id}] plan len={len(plan_text)}")
 
-        # 3) ReAct 流程
+        # 3) ReAct 流程 — 使用 stream_mode="messages" 实现逐 token 流式
         input_dict = {"messages": messages}
         try:
-            for chunk in self.agent.stream(
-                input_dict, stream_mode="values", context={"report": False, "trace_id": trace_id}
+            for message_chunk, metadata in self.agent.stream(
+                input_dict,
+                stream_mode="messages",
+                context={"report": False, "trace_id": trace_id},
             ):
-                latest_message = chunk["messages"][-1]
-                text = self._normalize_stream_text((getattr(latest_message, "content", None) or "").strip())
+                chunk_class = type(message_chunk).__name__
 
-                if not text:
-                    reasoning = None
-                    try:
-                        reasoning = getattr(latest_message, "additional_kwargs", {}).get("reasoning_content")
-                    except Exception:
-                        pass
-                    if reasoning:
-                        tool_name, params = self._parse_inline_tool(str(reasoning))
-                        if tool_name and tool_name in self.inline_tool_names:
-                            tool_start_msg = f"[THINK] 正在调用工具：{tool_name}。"
-                            if tool_start_msg not in sent_contents:
-                                sent_contents.add(tool_start_msg)
-                                logger.debug(f"[react_agent][{trace_id}] chunk len={len(tool_start_msg)}")
-                                yield tool_start_msg + "\n"
+                # 跳过非 AI 消息（HumanMessage / SystemMessage）
+                if chunk_class in ("HumanMessage", "SystemMessage"):
+                    continue
 
-                            try:
-                                tool_func = self.tools_map[tool_name]
-                                invoke_args = params or {}
-                                if hasattr(tool_func, "invoke"):
-                                    result = tool_func.invoke(invoke_args)
-                                elif callable(tool_func):
-                                    result = tool_func(**invoke_args) if invoke_args else tool_func()
-                                else:
-                                    raise RuntimeError(f"tool {tool_name} is not invokable")
+                # ToolMessage：工具执行结果
+                if chunk_class == "ToolMessage":
+                    tool_name = getattr(message_chunk, "name", "") or ""
+                    think_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
+                    if think_msg not in sent_contents:
+                        sent_contents.add(think_msg)
+                        logger.debug(
+                            f"[react_agent][{trace_id}] tool done: {tool_name}"
+                        )
+                        yield think_msg + "\n"
+                    continue
 
-                                tool_done_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
-                                if tool_done_msg not in sent_contents:
-                                    sent_contents.add(tool_done_msg)
-                                    logger.debug(f"[react_agent][{trace_id}] chunk len={len(tool_done_msg)}")
-                                    yield tool_done_msg + "\n"
-
-                                final_text = self._summarize_inline_tool_result(
-                                    query=query,
-                                    tool_name=tool_name,
-                                    params=invoke_args,
-                                    result=result,
+                # AIMessageChunk：逐 token 内容 或 工具调用
+                if chunk_class in ("AIMessageChunk", "AIMessage"):
+                    # 优先处理 tool_call_chunks（流式工具调用）
+                    tool_call_chunks = getattr(message_chunk, "tool_call_chunks", None)
+                    if tool_call_chunks:
+                        tool_names = []
+                        for tc in tool_call_chunks:
+                            if isinstance(tc, dict):
+                                name = tc.get("name", "")
+                            else:
+                                name = getattr(tc, "name", "") or ""
+                            if name:
+                                tool_names.append(name)
+                        if tool_names:
+                            think_msg = (
+                                f"[THINK] 正在调用工具：{', '.join(tool_names)}。"
+                            )
+                            if think_msg not in sent_contents:
+                                sent_contents.add(think_msg)
+                                logger.debug(
+                                    f"[react_agent][{trace_id}] tool call: {tool_names}"
                                 )
-                                final_text = self._normalize_stream_text(final_text)
-                                if final_text and final_text not in sent_contents:
-                                    sent_contents.add(final_text)
-                                    logger.debug(f"[react_agent][{trace_id}] chunk len={len(final_text)}")
-                                    yield final_text + "\n"
-                                return
-                            except Exception as tool_exc:
-                                logger.error(f"[react_agent][{trace_id}] inline tool {tool_name} failed: {tool_exc}")
-                                text = f"[THINK] 工具 {tool_name} 执行失败：{tool_exc}"
-                        if not text:
-                            text = "[THINK] 正在分析问题并整理答案。"
+                                yield think_msg + "\n"
 
-                if not text:
-                    tool_calls = getattr(latest_message, "tool_calls", None)
-                    if tool_calls:
-                        text = self._tool_call_summary(tool_calls)
+                    # 提取逐 token 的内容
+                    token_content = getattr(message_chunk, "content", None) or ""
+                    if token_content and token_content not in sent_contents:
+                        sent_contents.add(token_content)
+                        logger.debug(
+                            f"[react_agent][{trace_id}] token len={len(token_content)}"
+                        )
+                        yield token_content
 
-                if not text:
-                    continue
+                    # 兜底：检查 tool_calls（非流式工具调用格式）
+                    tool_calls = getattr(message_chunk, "tool_calls", None)
+                    if tool_calls and not tool_call_chunks:
+                        think_msg = self._tool_call_summary(tool_calls)
+                        if think_msg not in sent_contents:
+                            sent_contents.add(think_msg)
+                            yield think_msg + "\n"
 
-                if not text or text in sent_contents:
-                    logger.debug(f"[react_agent][{trace_id}] skip duplicate/empty chunk")
-                    continue
-                sent_contents.add(text)
-                logger.debug(f"[react_agent][{trace_id}] chunk len={len(text)}")
-                yield text + "\n"
+                    # Minimax 风格：检查 reasoning_content 中的内联工具调用
+                    if not token_content and not tool_call_chunks and not tool_calls:
+                        reasoning = None
+                        try:
+                            reasoning = getattr(
+                                message_chunk, "additional_kwargs", {}
+                            ).get("reasoning_content")
+                        except Exception:
+                            pass
+                        if reasoning:
+                            tool_name, params = self._parse_inline_tool(str(reasoning))
+                            if tool_name and tool_name in self.inline_tool_names:
+                                tool_start_msg = f"[THINK] 正在调用工具：{tool_name}。"
+                                if tool_start_msg not in sent_contents:
+                                    sent_contents.add(tool_start_msg)
+                                    logger.debug(
+                                        f"[react_agent][{trace_id}] inline tool: {tool_name}"
+                                    )
+                                    yield tool_start_msg + "\n"
+
+                                try:
+                                    tool_func = self.tools_map[tool_name]
+                                    invoke_args = params or {}
+                                    if hasattr(tool_func, "invoke"):
+                                        result = tool_func.invoke(invoke_args)
+                                    elif callable(tool_func):
+                                        result = (
+                                            tool_func(**invoke_args)
+                                            if invoke_args
+                                            else tool_func()
+                                        )
+                                    else:
+                                        raise RuntimeError(
+                                            f"tool {tool_name} is not invokable"
+                                        )
+
+                                    tool_done_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
+                                    if tool_done_msg not in sent_contents:
+                                        sent_contents.add(tool_done_msg)
+                                        logger.debug(
+                                            f"[react_agent][{trace_id}] chunk len={len(tool_done_msg)}"
+                                        )
+                                        yield tool_done_msg + "\n"
+
+                                    final_text = self._summarize_inline_tool_result(
+                                        query=query,
+                                        tool_name=tool_name,
+                                        params=invoke_args,
+                                        result=result,
+                                    )
+                                    final_text = self._normalize_stream_text(final_text)
+                                    if final_text and final_text not in sent_contents:
+                                        sent_contents.add(final_text)
+                                        logger.debug(
+                                            f"[react_agent][{trace_id}] chunk len={len(final_text)}"
+                                        )
+                                        yield final_text + "\n"
+                                    return
+                                except Exception as tool_exc:
+                                    logger.error(
+                                        f"[react_agent][{trace_id}] inline tool {tool_name} failed: {tool_exc}"
+                                    )
+                                    think_msg = (
+                                        f"[THINK] 工具 {tool_name} 执行失败：{tool_exc}"
+                                    )
+                                    if think_msg not in sent_contents:
+                                        sent_contents.add(think_msg)
+                                        yield think_msg + "\n"
+
         except Exception as exc:
             logger.error(f"[react_agent][{trace_id}] stream failed: {exc}")
             yield f"[ERROR] {exc}"

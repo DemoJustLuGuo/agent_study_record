@@ -22,6 +22,3 @@ class KnowledgeBaseService:
         return self.vector_store.rollback_snapshot(snapshot_name=snapshot_name)
 
 
-if __name__ == "__main__":
-    service = KnowledgeBaseService()
-    print(service.upload_by_str("这是一个测试字符串", "test.txt"))

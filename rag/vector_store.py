@@ -3,6 +3,8 @@ import hashlib
 import json
 import os
 import shutil
+import threading
+import time
 from datetime import datetime
 
 from langchain_chroma import Chroma
@@ -11,11 +13,14 @@ from utils.path_tools import get_abs_path
 from utils.config_handler import chroma_conf
 from model.factory import embeddings_model
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from utils.file_handler import txt_loader,pdf_loader,listdir_with_allowed_type,get_file_md5_hex
+from utils.file_handler import get_file_md5_hex, load_documents_by_path
 from utils.log import logger
 
 class VectorStoreService:
-    def __init__(self):
+    _auto_sync_lock = threading.Lock()
+    _last_auto_sync_ts = 0.0
+
+    def __init__(self, enable_auto_sync: bool = True):
         self.persist_directory = get_abs_path(chroma_conf["persist_directory"])
         self.vector_store = Chroma(
             collection_name = chroma_conf["collection_name"],
@@ -28,6 +33,14 @@ class VectorStoreService:
             separators = chroma_conf["separator"],
             length_function = len,
         )
+        self.enable_auto_sync = enable_auto_sync
+        self.auto_sync_on_init = bool(chroma_conf.get("auto_sync_on_init", True))
+        self.auto_sync_before_retrieval = bool(chroma_conf.get("auto_sync_before_retrieval", True))
+        self.auto_sync_min_interval_seconds = int(chroma_conf.get("auto_sync_min_interval_seconds", 30))
+        self.document_loader_conf = chroma_conf.get("document_loader", {})
+
+        if self.enable_auto_sync and self.auto_sync_on_init:
+            self.auto_sync_data_dir(trigger="init")
 
     def _md5_store_path(self) -> str:
         return get_abs_path(chroma_conf["md5_hex_store"])
@@ -266,23 +279,69 @@ class VectorStoreService:
         return "【成功】内容已成功添加到知识库中"
         
     def get_retriever(self):
+        if self.enable_auto_sync and self.auto_sync_before_retrieval:
+            self.auto_sync_data_dir(trigger="get_retriever")
         return self.vector_store.as_retriever(search_kwargs={"k": chroma_conf["k"]})
+
+    @staticmethod
+    def _normalize_allowed_extensions(allowed_types:list[str] | tuple[str, ...]) -> tuple[str, ...]:
+        normalized = []
+        for item in allowed_types:
+            ext = str(item).strip().lower()
+            if not ext:
+                continue
+            if not ext.startswith("."):
+                ext = f".{ext}"
+            normalized.append(ext)
+        return tuple(normalized)
+
+    def _list_knowledge_files(self) -> tuple[str, ...]:
+        data_root = get_abs_path(chroma_conf["data_path"])
+        allowed_extensions = self._normalize_allowed_extensions(
+            chroma_conf["allowed_knowledge_file_type"]
+        )
+        if not os.path.isdir(data_root):
+            logger.error(f"[load_documents]{data_root}不是一个目录")
+            return tuple()
+
+        files:list[str] = []
+        for root, _, filenames in os.walk(data_root):
+            for filename in filenames:
+                full_path = os.path.join(root, filename)
+                if full_path.lower().endswith(allowed_extensions):
+                    files.append(full_path)
+        files.sort()
+        return tuple(files)
+
+    def auto_sync_data_dir(self, trigger:str="runtime") -> dict[str, object]:
+        if not self.enable_auto_sync:
+            return {"status": "disabled", "trigger": trigger}
+
+        now = time.time()
+        if (
+            self.auto_sync_min_interval_seconds > 0
+            and now - self.__class__._last_auto_sync_ts < self.auto_sync_min_interval_seconds
+        ):
+            return {"status": "skipped", "trigger": trigger, "reason": "interval_limit"}
+
+        with self.__class__._auto_sync_lock:
+            now = time.time()
+            if (
+                self.auto_sync_min_interval_seconds > 0
+                and now - self.__class__._last_auto_sync_ts < self.auto_sync_min_interval_seconds
+            ):
+                return {"status": "skipped", "trigger": trigger, "reason": "interval_limit"}
+
+            result = self.load_documents()
+            self.__class__._last_auto_sync_ts = time.time()
+            result["status"] = "synced"
+            result["trigger"] = trigger
+            return result
 
     def load_documents(self):
         manifest = self._load_manifest()
-
-        def get_file_documents(read_path:str):
-            if read_path.endswith(".txt"):
-                return txt_loader(read_path)
-            if read_path.endswith(".pdf"):
-                return pdf_loader(read_path)
-
-            return []
         
-        allowed_files_path:tuple[str, ...] = listdir_with_allowed_type(
-        get_abs_path(chroma_conf["data_path"]),
-        tuple(chroma_conf["allowed_knowledge_file_type"])
-        )
+        allowed_files_path = self._list_knowledge_files()
 
         add_count = 0
         update_count = 0
@@ -316,7 +375,10 @@ class VectorStoreService:
                 update_count += 1
 
             try:
-                documents : list[Document] = get_file_documents(path)
+                documents, loader_name = load_documents_by_path(
+                    path,
+                    loader_conf=self.document_loader_conf,
+                )
                 if not documents:
                     logger.warning(f"文件{path}没有加载到任何文档，可能是格式不受支持")
                     continue
@@ -334,6 +396,7 @@ class VectorStoreService:
                     doc.metadata["source_md5"] = md5_hex
                     doc.metadata["source_type"] = "file_scan"
                     doc.metadata["indexed_at"] = indexed_time
+                    doc.metadata["parse_loader"] = loader_name
 
                 self.vector_store.add_documents(split_document)
                 manifest[source_path] = self._manifest_entry(
@@ -342,7 +405,7 @@ class VectorStoreService:
                     operator="system",
                 )
                 add_count += 1
-                logger.info(f"文件{path}已成功加载到向量数据库")
+                logger.info(f"文件{path}已成功加载到向量数据库，loader={loader_name}")
             except Exception as e:
                 logger.error(f"加载文件{path}时发生错误: {str(e)}",exc_info=True)
                 continue
@@ -357,6 +420,13 @@ class VectorStoreService:
             update_count,
             len(removed_sources),
         )
+        return {
+            "added_or_rebuilt": add_count,
+            "updated": update_count,
+            "removed_source_count": len(removed_sources),
+            "removed_sources": removed_sources,
+            "scanned_file_count": len(allowed_files_path),
+        }
 
 
 def _build_parser() -> argparse.ArgumentParser:

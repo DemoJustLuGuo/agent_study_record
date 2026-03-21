@@ -5,9 +5,46 @@ data_path: data
 md5_hex_store: md5.text
 index_manifest_store: chroma_manifest.json
 lifecycle_snapshot_dir: chroma_snapshots
-allowed_knowledge_file_type: ["txt", "pdf"]
+allowed_knowledge_file_type: ["txt", "pdf", "md", "docx", "html", "htm", "csv"]
+auto_sync_on_init: true
+auto_sync_before_retrieval: true
+auto_sync_min_interval_seconds: 15
+document_loader:
+  loader_priority:
+    pdf: ["marker", "unstructured_pdf", "pypdf"]
+    txt: ["text"]
+    md: ["unstructured_markdown", "text"]
+    docx: ["unstructured_docx", "text"]
+    html: ["unstructured_html", "text"]
+    htm: ["unstructured_html", "text"]
+    csv: ["csv"]
+  pdf:
+    marker_enabled: true
+    marker_command: marker_single
+    marker_timeout_seconds: 300
+    unstructured_mode: elements
+    unstructured_strategy: hi_res
+    infer_table_structure: true
+    pypdf_mode: page
+    pypdf_extraction_mode: layout
 
 chunk_size: 200
 chunk_overlap: 20
 
-separator: ["\n", "\n", "。", "， ", "； ", "！ ", "？ "]
+separator:
+  - "\n\n"
+  - "\n### "
+  - "\n## "
+  - "\n# "
+  - "\n|"
+  - "\n- "
+  - "\n"
+  - "$$"
+  - "$"
+  - "。"
+  - "；"
+  - "，"
+  - ". "
+  - "; "
+  - ", "
+  - " "

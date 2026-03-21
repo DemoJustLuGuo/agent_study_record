@@ -12,7 +12,7 @@ from utils.prompt_loader import load_rag_prompt
 
 class RAGSummarizeService:
     def __init__(self):
-        self.vector_store = VectorStoreService()
+        self.vector_store = VectorStoreService(enable_auto_sync=True)
         self.retriever = self.vector_store.get_retriever()
         self.prompt_text = load_rag_prompt()
         self.prompt_template = PromptTemplate.from_template(self.prompt_text)
@@ -37,6 +37,9 @@ class RAGSummarizeService:
         return "\n\n".join(context_blocks)
 
     def answer_with_references(self, query:str) -> dict[str, Any]:
+        if self.vector_store.auto_sync_before_retrieval:
+            self.vector_store.auto_sync_data_dir(trigger="rag_query")
+
         context_docs = self.retriever_docs(query)
         context = self._build_context(context_docs)
 

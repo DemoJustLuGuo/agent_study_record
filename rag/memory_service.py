@@ -2,7 +2,6 @@ import hashlib
 from datetime import datetime
 from typing import List, Dict
 
-from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from rag.vector_store import VectorStoreService
@@ -14,7 +13,8 @@ class LongTermMemoryService:
     """Lightweight long-term memory built on existing Chroma store."""
 
     def __init__(self):
-        self.vector_service = VectorStoreService()
+        # 记忆服务不需要在初始化时扫描 data 目录，避免重复开销。
+        self.vector_service = VectorStoreService(enable_auto_sync=False)
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=chroma_conf["chunk_size"],
             chunk_overlap=chroma_conf["chunk_overlap"],

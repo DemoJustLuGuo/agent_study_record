@@ -78,60 +78,13 @@ if "%PYTHONPATH%"=="" (
     set "PYTHONPATH=%CD%;%PYTHONPATH%"
 )
 
-where node >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Node.js not found. Please install Node.js 18+.
-    pause
-    exit /b 1
-)
-
-where npm >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] npm not found. Please reinstall Node.js.
-    pause
-    exit /b 1
-)
-
-if not exist "electron\package.json" (
-    echo [ERROR] electron\package.json not found.
-    pause
-    exit /b 1
-)
-
-echo [INFO] Checking Electron dependencies...
-pushd electron
-
-if not exist "node_modules" (
-    echo [INFO] node_modules not found, running npm install...
-    call npm install
-    if errorlevel 1 (
-        echo [ERROR] npm install failed.
-        popd
-        pause
-        exit /b 1
-    )
-) else (
-    call npm ls --depth=0 >nul 2>&1
-    if errorlevel 1 (
-        echo [INFO] Detected invalid/missing npm packages, running npm install...
-        call npm install
-        if errorlevel 1 (
-            echo [ERROR] npm install failed.
-            popd
-            pause
-            exit /b 1
-        )
-    )
-)
-
-echo [INFO] Starting Electron desktop app...
-echo [INFO] Backend URL: %BACKEND_URL%
-call npm start
+echo [INFO] Starting Gradio app...
+echo [INFO] URL: http://%APP_HOST%:%APP_PORT%
+"%PYTHON_EXE%" -m app.main
 set "EXIT_CODE=%ERRORLEVEL%"
-popd
 
 if not "%EXIT_CODE%"=="0" (
-    echo [ERROR] Electron app exited with code %EXIT_CODE%.
+    echo [ERROR] Gradio app exited with code %EXIT_CODE%.
 )
 
 pause

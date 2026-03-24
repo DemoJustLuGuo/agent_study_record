@@ -10,7 +10,7 @@
 1. 网络搜索（web_search）
 2. Python 解释器（python）
 3. MATLAB/Octave 解释器（matlab）
-4. 特定外部 API（external_api）
+4. 特定外部 API（fetch_external_data）
 
 当任务需要外部事实、计算验证或系统数据时，必须优先调用工具而非主观猜测。
 

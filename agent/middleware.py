@@ -4,6 +4,7 @@ import json
 import os
 import time
 from datetime import datetime
+from threading import Lock
 from typing import Any, Callable
 
 from langchain.agents import AgentState
@@ -29,6 +30,8 @@ TRUNCATE_RESULT = 800
 TRACE_MESSAGE_LIMIT = 8
 TRACE_DIR = os.path.join(LOG_ROOT, "traces")
 os.makedirs(TRACE_DIR, exist_ok=True)
+_TOOL_EVENTS: dict[str, list[dict[str, str]]] = {}
+_TOOL_EVENTS_LOCK = Lock()
 
 
 def _trace_id(runtime: Runtime | None) -> str:
@@ -106,6 +109,38 @@ def _write_trace(runtime: Runtime | None, event: str, **payload: Any) -> None:
         logger.debug(f"{_log_prefix(runtime)}trace file write failed: {exc}")
 
 
+def _push_tool_event(runtime: Runtime | None, phase: str, tool: str) -> None:
+    trace_id = _trace_id(runtime)
+    if not trace_id:
+        return
+
+    with _TOOL_EVENTS_LOCK:
+        queue = _TOOL_EVENTS.setdefault(trace_id, [])
+        queue.append({"phase": phase, "tool": tool})
+        if len(queue) > 100:
+            del queue[:-100]
+
+
+def pop_tool_events(trace_id: str) -> list[dict[str, str]]:
+    if not trace_id:
+        return []
+
+    with _TOOL_EVENTS_LOCK:
+        queue = _TOOL_EVENTS.get(trace_id, [])
+        if not queue:
+            return []
+        events = list(queue)
+        queue.clear()
+        return events
+
+
+def clear_tool_events(trace_id: str) -> None:
+    if not trace_id:
+        return
+    with _TOOL_EVENTS_LOCK:
+        _TOOL_EVENTS.pop(trace_id, None)
+
+
 @wrap_tool_call
 def monitor_tool(
     request: ToolCallRequest,
@@ -121,6 +156,7 @@ def monitor_tool(
     trace_prefix = _log_prefix(request.runtime)
 
     logger.info(f"{trace_prefix}[tool] start name={tool_name} args_preview={args_preview}")
+    _push_tool_event(request.runtime, "start", tool_name)
     _write_trace(
         request.runtime,
         "tool_start",
@@ -148,6 +184,7 @@ def monitor_tool(
             elapsed_ms=elapsed,
             result_preview=preview,
         )
+        _push_tool_event(request.runtime, "end", tool_name)
 
         if tool_name == "fill_context_for_report":
             request.runtime.context["report"] = True
@@ -164,6 +201,7 @@ def monitor_tool(
             elapsed_ms=elapsed,
             error=str(exc),
         )
+        _push_tool_event(request.runtime, "error", tool_name)
         raise
 
 

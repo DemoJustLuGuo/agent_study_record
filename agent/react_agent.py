@@ -7,10 +7,12 @@ from typing import Any
 from langchain.agents import create_agent
 
 from agent.middleware import (
+    clear_tool_events,
     log_after_model,
     log_before_model,
     log_model_call,
     monitor_tool,
+    pop_tool_events,
     report_prompt_switch,
 )
 from agent.tools.registry import get_registered_tool_map, register_tools
@@ -234,6 +236,29 @@ class ReactAgent:
         logger.info(f"[react_agent][{trace_id}] received query")
         messages = [{"role": "user", "content": query}]
         sent_contents: set[str] = set()
+        clear_tool_events(trace_id)
+
+        def _drain_tool_events() -> list[str]:
+            messages_out: list[str] = []
+            for event in pop_tool_events(trace_id):
+                phase = str(event.get("phase", "")).strip()
+                tool_name = str(event.get("tool", "")).strip()
+                if not tool_name:
+                    continue
+
+                if phase == "start":
+                    msg = f"[THINK] 正在调用工具：{tool_name}。"
+                elif phase == "end":
+                    msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
+                elif phase == "error":
+                    msg = f"[THINK] 工具 {tool_name} 调用失败，正在尝试恢复。"
+                else:
+                    continue
+
+                if msg not in sent_contents:
+                    sent_contents.add(msg)
+                    messages_out.append(msg + "\n")
+            return messages_out
 
         # 1) 路由提示
         strategy = self._route_strategy(query)
@@ -258,6 +283,9 @@ class ReactAgent:
                 stream_mode="messages",
                 context={"report": False, "trace_id": trace_id},
             ):
+                for pending in _drain_tool_events():
+                    yield pending
+
                 chunk_class = type(message_chunk).__name__
 
                 # 跳过非 AI 消息（HumanMessage / SystemMessage）
@@ -386,6 +414,11 @@ class ReactAgent:
                                         sent_contents.add(think_msg)
                                         yield think_msg + "\n"
 
+                for pending in _drain_tool_events():
+                    yield pending
+
         except Exception as exc:
             logger.error(f"[react_agent][{trace_id}] stream failed: {exc}")
             yield f"[ERROR] {exc}"
+        finally:
+            clear_tool_events(trace_id)

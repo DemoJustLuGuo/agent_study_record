@@ -1,20 +1,21 @@
 import os
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import gradio as gr
 
-from agent.react_agent import ReactAgent
-from rag.knowledge_base import KnowledgeBaseService
-from rag.rag_service import RAGSummarizeService
+if TYPE_CHECKING:
+    from agent.react_agent import ReactAgent
+    from rag.knowledge_base import KnowledgeBaseService
+    from rag.rag_service import RAGSummarizeService
 
 
-agent = None
+agent: "ReactAgent | None" = None
 agent_lock = Lock()
-knowledge_base_service = None
+knowledge_base_service: "KnowledgeBaseService | None" = None
 knowledge_base_lock = Lock()
-rag_service = None
+rag_service: "RAGSummarizeService | None" = None
 rag_service_lock = Lock()
 
 def _load_app_css() -> str:
@@ -34,29 +35,35 @@ THINKING_HTML = (
 )
 
 
-def get_agent() -> ReactAgent:
+def get_agent() -> "ReactAgent":
     global agent
     if agent is None:
         with agent_lock:
             if agent is None:
+                from agent.react_agent import ReactAgent
+
                 agent = ReactAgent()
     return agent
 
 
-def get_knowledge_base_service() -> KnowledgeBaseService:
+def get_knowledge_base_service() -> "KnowledgeBaseService":
     global knowledge_base_service
     if knowledge_base_service is None:
         with knowledge_base_lock:
             if knowledge_base_service is None:
+                from rag.knowledge_base import KnowledgeBaseService
+
                 knowledge_base_service = KnowledgeBaseService()
     return knowledge_base_service
 
 
-def get_rag_service() -> RAGSummarizeService:
+def get_rag_service() -> "RAGSummarizeService":
     global rag_service
     if rag_service is None:
         with rag_service_lock:
             if rag_service is None:
+                from rag.rag_service import RAGSummarizeService
+
                 rag_service = RAGSummarizeService()
     return rag_service
 

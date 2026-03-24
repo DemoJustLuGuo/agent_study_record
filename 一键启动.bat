@@ -33,13 +33,27 @@ if not exist "requirements.txt" (
     exit /b 1
 )
 
-echo [INFO] Verifying/installing Python dependencies from requirements.txt...
+set "DEPS_MARKER=.deps_installed"
+if /I "%FORCE_PIP_INSTALL%"=="1" goto install_deps
+if /I "%SKIP_PIP_INSTALL%"=="1" goto deps_ready
+if exist "%DEPS_MARKER%" (
+    echo [INFO] Dependency installation skipped. Marker found: %DEPS_MARKER%
+    echo [INFO] Use FORCE_PIP_INSTALL=1 to reinstall dependencies.
+    goto deps_ready
+)
+
+:install_deps
+echo [INFO] Installing Python dependencies from requirements.txt...
 "%PYTHON_EXE%" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 (
     echo [ERROR] Python dependency installation failed.
     pause
     exit /b 1
 )
+>"%DEPS_MARKER%" echo installed_at=%DATE% %TIME%
+echo [INFO] Dependency installation completed.
+
+:deps_ready
 
 if "%OPENAI_API_KEY%"=="" if not "%SILICONFLOW_API_KEY%"=="" set "OPENAI_API_KEY=%SILICONFLOW_API_KEY%"
 

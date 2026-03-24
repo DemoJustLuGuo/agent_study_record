@@ -6,7 +6,7 @@ md5_hex_store: md5.text
 index_manifest_store: chroma_manifest.json
 lifecycle_snapshot_dir: chroma_snapshots
 allowed_knowledge_file_type: ["txt", "pdf", "md", "docx", "html", "htm", "csv"]
-auto_sync_on_init: true
+auto_sync_on_init: false
 auto_sync_before_retrieval: true
 auto_sync_min_interval_seconds: 15
 document_loader:

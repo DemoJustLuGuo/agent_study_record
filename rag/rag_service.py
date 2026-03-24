@@ -13,7 +13,7 @@ from utils.prompt_loader import load_rag_prompt
 class RAGSummarizeService:
     def __init__(self):
         self.vector_store = VectorStoreService(enable_auto_sync=True)
-        self.retriever = self.vector_store.get_retriever()
+        self.retriever = None
         self.prompt_text = load_rag_prompt()
         self.prompt_template = PromptTemplate.from_template(self.prompt_text)
         self.model = chat_model
@@ -23,8 +23,13 @@ class RAGSummarizeService:
     def _init_chain(self):
         return self.prompt_template | self.model | StrOutputParser()
 
+    def _get_retriever(self):
+        if self.retriever is None:
+            self.retriever = self.vector_store.get_retriever()
+        return self.retriever
+
     def retriever_docs(self, query:str) -> list[Document]:
-        return self.retriever.invoke(query)
+        return self._get_retriever().invoke(query)
 
     @staticmethod
     def _build_context(context_docs:list[Document]) -> str:

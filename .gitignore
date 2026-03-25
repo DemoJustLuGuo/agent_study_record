@@ -1,38 +1,36 @@
-# Python bytecode and caches
+# python相关
 __pycache__/
 *.py[cod]
 *.pyo
 
-# Virtual environments and local env files
+# 虚拟环境依赖
 .venv/
 venv/
 .env
 
-# Test and lint caches
+# 测试和类型检查缓存
 .pytest_cache/
 .mypy_cache/
 
-# Build artifacts
+# 构建产物
 build/
 dist/
 *.egg-info/
 
-# Electron dependencies and artifacts
-electron/node_modules/
-electron/dist/
-electron/out/
 
-# Runtime logs
+# 日志
 logs/
 *.log
 
-# Vector store runtime artifacts
+# 向量存储
 chroma_db/
 chroma_snapshots/
 md5.text
 chroma_manifest.json
 
-# Editor and OS artifacts
+# vscode目录
 .vscode/
 Thumbs.db
 .DS_Store
+
+.deps_installed

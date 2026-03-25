@@ -43,7 +43,7 @@ if exist "%DEPS_MARKER%" (
 )
 
 :install_deps
-echo [INFO] Installing Python dependencies from requirements.txt...
+echo [INFO] 正在根据requirements.txt安装依赖...
 "%PYTHON_EXE%" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 (
     echo [ERROR] Python dependency installation failed.
@@ -70,12 +70,12 @@ if "%OPENAI_API_KEY%"=="" if exist ".env" (
 )
 
 if "%OPENAI_API_KEY%"=="" (
-    echo [WARN] OPENAI_API_KEY is not set.
+    echo [WARN]  没有设置 OPENAI_API_KEY.
     set /p OPENAI_API_KEY=Please input OpenAI-compatible API key [sk-...]: 
 )
 
 if "%OPENAI_API_KEY%"=="" (
-    echo [ERROR] OPENAI_API_KEY is required.
+    echo [ERROR] 已经包含了OPENAI_API_KEY.
     pause
     exit /b 1
 )
@@ -92,7 +92,7 @@ if "%PYTHONPATH%"=="" (
     set "PYTHONPATH=%CD%;%PYTHONPATH%"
 )
 
-echo [INFO] Starting Gradio app...
+echo [INFO] 正在启动WebUI...
 echo [INFO] URL: http://%APP_HOST%:%APP_PORT%
 "%PYTHON_EXE%" -m app.main
 set "EXIT_CODE=%ERRORLEVEL%"

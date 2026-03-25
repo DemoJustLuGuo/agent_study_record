@@ -1,9 +1,13 @@
 import os
+import re
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
 import gradio as gr
+import yaml
+
+from utils.path_tools import get_abs_path
 
 if TYPE_CHECKING:
     from agent.react_agent import ReactAgent
@@ -17,6 +21,84 @@ knowledge_base_service: "KnowledgeBaseService | None" = None
 knowledge_base_lock = Lock()
 rag_service: "RAGSummarizeService | None" = None
 rag_service_lock = Lock()
+agent_config_lock = Lock()
+AGENT_CONFIG_PATH = get_abs_path("config/agent.yml")
+
+
+def _looks_like_env_var(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Z_][A-Z0-9_]*", (value or "").strip()))
+
+
+def _read_agent_config() -> dict[str, Any]:
+    try:
+        with open(AGENT_CONFIG_PATH, "r", encoding="utf-8") as file_obj:
+            data = yaml.safe_load(file_obj) or {}
+            return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+
+
+def _write_agent_config(config_data: dict[str, Any]) -> None:
+    config_dir = os.path.dirname(AGENT_CONFIG_PATH)
+    if config_dir:
+        os.makedirs(config_dir, exist_ok=True)
+    with open(AGENT_CONFIG_PATH, "w", encoding="utf-8") as file_obj:
+        yaml.safe_dump(config_data, file_obj, allow_unicode=True, sort_keys=False)
+
+
+def _mask_secret(secret: str) -> str:
+    value = (secret or "").strip()
+    if not value:
+        return "(empty)"
+    if len(value) <= 8:
+        return "*" * len(value)
+    return value[:4] + "*" * (len(value) - 8) + value[-4:]
+
+
+def _load_connection_defaults() -> tuple[str, str, str]:
+    config_data = _read_agent_config()
+    base_url = str(config_data.get("openai_base_url", "")).strip()
+    key_value = str(config_data.get("OPENAI_API_KEY", "")).strip()
+
+    if _looks_like_env_var(key_value):
+        status = (
+            "当前 `OPENAI_API_KEY` 配置为环境变量名，"
+            "请在下方填写真实密钥后自动写入 `config/agent.yml`。"
+        )
+        return base_url, "", status
+
+    if key_value:
+        status = (
+            f"已读取现有配置：API 地址 `{base_url}`，"
+            f"API Key `{_mask_secret(key_value)}`。"
+        )
+    else:
+        status = "尚未配置 OpenAI API 地址与密钥。"
+    return base_url, key_value, status
+
+
+def save_connection_settings(openai_base_url: str, openai_api_key: str) -> str:
+    base_url = (openai_base_url or "").strip()
+    api_key = (openai_api_key or "").strip()
+
+    if not base_url:
+        return "⚠️ API 地址为空，未保存。"
+    if not api_key:
+        return "⚠️ API 密钥为空，未保存。"
+
+    with agent_config_lock:
+        config_data = _read_agent_config()
+        config_data["openai_base_url"] = base_url
+        config_data["OPENAI_API_KEY"] = api_key
+        _write_agent_config(config_data)
+
+    os.environ["OPENAI_API_KEY"] = api_key
+    os.environ["SILICONFLOW_API_KEY"] = api_key
+
+    return (
+        f"✅ 已自动保存到 `config/agent.yml`："
+        f"API 地址 `{base_url}`，API Key `{_mask_secret(api_key)}`。"
+    )
 
 def _load_app_css() -> str:
     css_path = Path(__file__).with_name("ui.css")
@@ -209,6 +291,8 @@ def rollback_snapshot(snapshot_name: str):
 
 
 def build_app() -> gr.Blocks:
+    default_base_url, default_api_key, connection_status_text = _load_connection_defaults()
+
     with gr.Blocks(
         title="通信智能体工作台", css=_load_app_css(), theme=gr.themes.Base()
     ) as demo:
@@ -221,6 +305,38 @@ def build_app() -> gr.Blocks:
             "</div>"
             '<span class="status-badge online">在线运行</span>'
             "</div>"
+        )
+
+        with gr.Group(elem_classes=["card"]):
+            gr.Markdown("### 🔐 OpenAI 连接设置")
+            gr.Markdown(
+                "在主页直接填写 OpenAI 兼容 API 地址与密钥。输入框失焦后将自动写入 `config/agent.yml`。"
+            )
+            with gr.Row():
+                openai_base_url_input = gr.Textbox(
+                    label="OpenAI API 地址",
+                    value=default_base_url,
+                    placeholder="例如：https://api.openai.com/v1",
+                )
+                openai_api_key_input = gr.Textbox(
+                    label="OpenAI API 密钥",
+                    value=default_api_key,
+                    placeholder="sk-...",
+                    type="password",
+                )
+            connection_status = gr.Markdown(connection_status_text)
+
+        openai_base_url_input.change(
+            fn=save_connection_settings,
+            inputs=[openai_base_url_input, openai_api_key_input],
+            outputs=[connection_status],
+            show_progress="hidden",
+        )
+        openai_api_key_input.change(
+            fn=save_connection_settings,
+            inputs=[openai_base_url_input, openai_api_key_input],
+            outputs=[connection_status],
+            show_progress="hidden",
         )
 
         # ===== Main Tabs =====

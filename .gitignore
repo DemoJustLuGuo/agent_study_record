@@ -1,5 +1,5 @@
 # python相关
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 
@@ -34,3 +34,6 @@ Thumbs.db
 .DS_Store
 
 .deps_installed
+
+# Jetbrains IDEs
+.idea/

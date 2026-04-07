@@ -87,10 +87,12 @@ python -m app.main
 或 Windows 下使用：
 
 ```bat
-一键启动.bat
+launch.bat
 ```
 
 默认访问地址：`http://127.0.0.1:7860`
+
+日志等级可通过环境变量 `LOG_LEVEL` 控制（`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`）。
 
 ## Gradio 页面与 API
 

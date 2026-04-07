@@ -241,9 +241,28 @@ def log_model_call(request: ModelRequest, handler: Callable[[ModelRequest], Mode
     start = time.perf_counter()
     trace_prefix = _log_prefix(request.runtime)
     model_name = getattr(request.model, "model_name", None) or getattr(request.model, "model", None) or type(request.model).__name__
+    model_temperature = getattr(request.model, "temperature", None)
+    model_base_url = (
+        getattr(request.model, "openai_api_base", None)
+        or getattr(request.model, "base_url", None)
+        or ""
+    )
+    tool_names = []
+    for tool_obj in request.tools or []:
+        tool_name = getattr(tool_obj, "name", None) or getattr(tool_obj, "__name__", None)
+        if tool_name:
+            tool_names.append(str(tool_name))
 
     logger.info(
         f"{trace_prefix}[model] start name={model_name} messages={len(request.messages)} tools={len(request.tools or [])} report={request.runtime.context.get('report', False)}"
+    )
+    logger.debug(
+        "%s[openai] request params model=%s temperature=%s base_url=%s tools=%s",
+        trace_prefix,
+        model_name,
+        model_temperature,
+        model_base_url,
+        tool_names,
     )
     _write_trace(
         request.runtime,

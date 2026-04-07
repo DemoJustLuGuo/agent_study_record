@@ -32,6 +32,11 @@ class ReactAgent:
     def __init__(self) -> None:
         self.tools_map = get_registered_tool_map()
         self.inline_tool_names = set(self.tools_map.keys())
+        logger.info(
+            "[react_agent] init tools_count=%s tools=%s",
+            len(self.inline_tool_names),
+            sorted(self.inline_tool_names),
+        )
         self.agent = create_agent(
             model=chat_model,
             tools=register_tools(),
@@ -117,6 +122,7 @@ class ReactAgent:
             f"用户需求：{query}\n"
             "请给出不超过5步的拆解，短句描述，若无需拆解则输出单步。"
         )
+        logger.debug("[react_agent] planning start query_len=%s", len(query or ""))
         plan = chat_model.invoke(plan_prompt)
         return getattr(plan, "content", str(plan))
 
@@ -234,6 +240,7 @@ class ReactAgent:
     def execute_stream(self, query: str):
         trace_id = uuid.uuid4().hex[:8]
         logger.info(f"[react_agent][{trace_id}] received query")
+        logger.debug("[react_agent][%s] query_preview=%s", trace_id, (query or "")[:300])
         messages = [{"role": "user", "content": query}]
         sent_contents: set[str] = set()
         clear_tool_events(trace_id)
@@ -264,7 +271,7 @@ class ReactAgent:
         strategy = self._route_strategy(query)
         strategy_msg = self._strategy_message(strategy)
         # 仅记录日志，不向前端输出，避免干扰用户和模型
-        logger.debug(f"[react_agent][{trace_id}] strategy={strategy}")
+        logger.info(f"[react_agent][{trace_id}] strategy={strategy} decision={strategy_msg}")
 
         # 2) 复杂请求 -> 任务拆解
         if self._needs_planning(query):
@@ -273,10 +280,11 @@ class ReactAgent:
                 f"任务规划：\n{plan_text}\n请按以上步骤逐步完成，并在结束时总结结果。"
             )
             # 仅记录日志，不输出到前端
-            logger.debug(f"[react_agent][{trace_id}] plan len={len(plan_text)}")
+            logger.info(f"[react_agent][{trace_id}] planning enabled plan_len={len(plan_text)}")
 
         # 3) ReAct 流程 — 使用 stream_mode="messages" 实现逐 token 流式
         input_dict = {"messages": messages}
+        logger.info(f"[react_agent][{trace_id}] stream start mode=messages")
         try:
             for message_chunk, metadata in self.agent.stream(
                 input_dict,
@@ -421,4 +429,5 @@ class ReactAgent:
             logger.error(f"[react_agent][{trace_id}] stream failed: {exc}")
             yield f"[ERROR] {exc}"
         finally:
+            logger.info(f"[react_agent][{trace_id}] stream finished")
             clear_tool_events(trace_id)

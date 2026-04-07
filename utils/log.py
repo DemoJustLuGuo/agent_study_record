@@ -64,6 +64,26 @@ def _reconfigure_std_streams():
                 pass
 
 
+def _resolve_level_name(level_name: str) -> int | None:
+    raw = str(level_name or "").strip().upper()
+    if not raw:
+        return None
+    mapping = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "WARN": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL,
+        "FATAL": logging.CRITICAL,
+    }
+    return mapping.get(raw)
+
+
+def _level_floor_from_env() -> int | None:
+    return _resolve_level_name(os.environ.get("LOG_LEVEL", ""))
+
+
 def get_logger(
     name: str = "agent-lab",
     console_level: int = logging.INFO,
@@ -78,6 +98,11 @@ def get_logger(
 
     if logger.handlers:
         return logger
+
+    level_floor = _level_floor_from_env()
+    if level_floor is not None:
+        console_level = max(console_level, level_floor)
+        file_level = max(file_level, level_floor)
 
     console_handler = logging.StreamHandler(_utf8_stream(sys.stdout))
     console_handler.setLevel(console_level)

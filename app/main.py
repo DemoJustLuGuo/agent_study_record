@@ -8,6 +8,7 @@ import gradio as gr
 import yaml
 
 from utils.path_tools import get_abs_path
+from utils.log import logger
 
 if TYPE_CHECKING:
     from agent.react_agent import ReactAgent
@@ -193,6 +194,7 @@ def stream_agent_reply(message: str, history: list[dict[str, str]]):
     thinking_shown = False
 
     try:
+        logger.info("[chat] request start prompt_len=%s history_len=%s", len(prompt), len(history or []))
         runtime_agent = get_agent()
         for chunk in runtime_agent.execute_stream(prompt):
             text = chunk.strip()
@@ -211,7 +213,9 @@ def stream_agent_reply(message: str, history: list[dict[str, str]]):
                 yield f"{THINKING_HTML}\n\n**▌ 思考中...**\n\n" + "".join(chunks)
             else:
                 yield "".join(chunks)
+        logger.info("[chat] request done chunks=%s thinking_phase=%s", len(chunks), thinking_shown)
     except Exception:
+        logger.exception("[chat] request failed")
         yield "⚠️ 系统错误：智能体处理失败，请稍后重试。"
 
 

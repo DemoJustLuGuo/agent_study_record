@@ -23,10 +23,10 @@ logs/
 *.log
 
 # 向量存储
-chroma_db/
-chroma_snapshots/
-md5.text
-chroma_manifest.json
+**/chroma_db/
+**/chroma_snapshots/
+**/md5.text
+**/chroma_manifest.json
 
 # vscode目录
 .vscode/

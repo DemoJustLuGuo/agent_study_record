@@ -242,7 +242,7 @@ class ReactAgent:
         logger.info(f"[react_agent][{trace_id}] received query")
         logger.debug("[react_agent][%s] query_preview=%s", trace_id, (query or "")[:300])
         messages = [{"role": "user", "content": query}]
-        sent_contents: set[str] = set()
+        emitted_status: set[str] = set()
         clear_tool_events(trace_id)
 
         def _drain_tool_events() -> list[str]:
@@ -262,8 +262,8 @@ class ReactAgent:
                 else:
                     continue
 
-                if msg not in sent_contents:
-                    sent_contents.add(msg)
+                if msg not in emitted_status:
+                    emitted_status.add(msg)
                     messages_out.append(msg + "\n")
             return messages_out
 
@@ -304,8 +304,8 @@ class ReactAgent:
                 if chunk_class == "ToolMessage":
                     tool_name = getattr(message_chunk, "name", "") or ""
                     think_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
-                    if think_msg not in sent_contents:
-                        sent_contents.add(think_msg)
+                    if think_msg not in emitted_status:
+                        emitted_status.add(think_msg)
                         logger.debug(
                             f"[react_agent][{trace_id}] tool done: {tool_name}"
                         )
@@ -329,8 +329,8 @@ class ReactAgent:
                             think_msg = (
                                 f"[THINK] 正在调用工具：{', '.join(tool_names)}。"
                             )
-                            if think_msg not in sent_contents:
-                                sent_contents.add(think_msg)
+                            if think_msg not in emitted_status:
+                                emitted_status.add(think_msg)
                                 logger.debug(
                                     f"[react_agent][{trace_id}] tool call: {tool_names}"
                                 )
@@ -338,8 +338,7 @@ class ReactAgent:
 
                     # 提取逐 token 的内容
                     token_content = getattr(message_chunk, "content", None) or ""
-                    if token_content and token_content not in sent_contents:
-                        sent_contents.add(token_content)
+                    if token_content:
                         logger.debug(
                             f"[react_agent][{trace_id}] token len={len(token_content)}"
                         )
@@ -349,8 +348,8 @@ class ReactAgent:
                     tool_calls = getattr(message_chunk, "tool_calls", None)
                     if tool_calls and not tool_call_chunks:
                         think_msg = self._tool_call_summary(tool_calls)
-                        if think_msg not in sent_contents:
-                            sent_contents.add(think_msg)
+                        if think_msg not in emitted_status:
+                            emitted_status.add(think_msg)
                             yield think_msg + "\n"
 
                     # Minimax 风格：检查 reasoning_content 中的内联工具调用
@@ -366,8 +365,8 @@ class ReactAgent:
                             tool_name, params = self._parse_inline_tool(str(reasoning))
                             if tool_name and tool_name in self.inline_tool_names:
                                 tool_start_msg = f"[THINK] 正在调用工具：{tool_name}。"
-                                if tool_start_msg not in sent_contents:
-                                    sent_contents.add(tool_start_msg)
+                                if tool_start_msg not in emitted_status:
+                                    emitted_status.add(tool_start_msg)
                                     logger.debug(
                                         f"[react_agent][{trace_id}] inline tool: {tool_name}"
                                     )
@@ -390,8 +389,8 @@ class ReactAgent:
                                         )
 
                                     tool_done_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
-                                    if tool_done_msg not in sent_contents:
-                                        sent_contents.add(tool_done_msg)
+                                    if tool_done_msg not in emitted_status:
+                                        emitted_status.add(tool_done_msg)
                                         logger.debug(
                                             f"[react_agent][{trace_id}] chunk len={len(tool_done_msg)}"
                                         )
@@ -404,8 +403,7 @@ class ReactAgent:
                                         result=result,
                                     )
                                     final_text = self._normalize_stream_text(final_text)
-                                    if final_text and final_text not in sent_contents:
-                                        sent_contents.add(final_text)
+                                    if final_text:
                                         logger.debug(
                                             f"[react_agent][{trace_id}] chunk len={len(final_text)}"
                                         )
@@ -418,8 +416,8 @@ class ReactAgent:
                                     think_msg = (
                                         f"[THINK] 工具 {tool_name} 执行失败：{tool_exc}"
                                     )
-                                    if think_msg not in sent_contents:
-                                        sent_contents.add(think_msg)
+                                    if think_msg not in emitted_status:
+                                        emitted_status.add(think_msg)
                                         yield think_msg + "\n"
 
                 for pending in _drain_tool_events():

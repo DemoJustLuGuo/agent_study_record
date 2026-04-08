@@ -118,6 +118,10 @@ THINKING_HTML = (
 )
 
 
+def _normalize_markdown_layout(text: str) -> str:
+    return (text or "").replace("\r\n", "\n")
+
+
 def get_agent() -> "ReactAgent":
     global agent
     if agent is None:
@@ -197,22 +201,28 @@ def stream_agent_reply(message: str, history: list[dict[str, str]]):
         logger.info("[chat] request start prompt_len=%s history_len=%s", len(prompt), len(history or []))
         runtime_agent = get_agent()
         for chunk in runtime_agent.execute_stream(prompt):
-            text = chunk.strip()
-            if not text:
+            if chunk is None:
+                continue
+            raw_chunk = str(chunk)
+            if raw_chunk == "":
                 continue
 
-            chunks.append(chunk)
+            chunks.append(raw_chunk)
 
             # 所有 chunk 都是 [THINK] 前缀时 → 仍在思考阶段，显示加载动画
             all_thinking = all(
                 c.strip().startswith("[THINK]") for c in chunks if c.strip()
             )
 
+            full_text = "".join(chunks)
             if all_thinking:
                 thinking_shown = True
-                yield f"{THINKING_HTML}\n\n**▌ 思考中...**\n\n" + "".join(chunks)
+                yield f"{THINKING_HTML}\n\n**▌ 思考中...**\n\n" + full_text
             else:
-                yield "".join(chunks)
+                yield _normalize_markdown_layout(full_text)
+        if chunks:
+            # 确保最终可复制文本是规范化后的版本。
+            yield _normalize_markdown_layout("".join(chunks))
         logger.info("[chat] request done chunks=%s thinking_phase=%s", len(chunks), thinking_shown)
     except Exception:
         logger.exception("[chat] request failed")

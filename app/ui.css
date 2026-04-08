@@ -206,6 +206,9 @@ body {
 .chatbot .message .md {
     color: var(--text-main) !important;
     line-height: 1.75 !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
 }
 
 /* ========== Markdown Rendering ========== */
@@ -217,6 +220,7 @@ body {
 .markdown-body h2,
 .markdown-body h3,
 .markdown-body h4 {
+    display: block !important;
     font-family: var(--font-display) !important;
     color: var(--text-main) !important;
     margin: 1rem 0 0.55rem !important;

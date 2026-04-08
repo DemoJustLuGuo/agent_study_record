@@ -185,7 +185,7 @@ __all__ = [
 
 ### Step 4 — 更新系统提示词
 
-在 `prompts/main_prompt.txt` 的【能力与授权】段落中添加新工具说明，
+在 `agent/prompts/main_prompt.txt` 的【能力与授权】段落中添加新工具说明，
 告知 Agent 何时应调用此工具。
 
 ### Step 5 — 编写验证脚本或测试
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 按照 R6 规范提交：
 
 ```bash
-git add agent/tools/modules/protocol_tools.py agent/tools/registry.py agent/tools/modules/__init__.py prompts/main_prompt.txt
+git add agent/tools/modules/protocol_tools.py agent/tools/registry.py agent/tools/modules/__init__.py agent/prompts/main_prompt.txt
 git commit -m "feat(tools): 添加 HDLC 协议帧解析工具"
 ```
 

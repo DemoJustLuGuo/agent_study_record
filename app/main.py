@@ -23,7 +23,7 @@ knowledge_base_lock = Lock()
 rag_service: "RAGSummarizeService | None" = None
 rag_service_lock = Lock()
 agent_config_lock = Lock()
-AGENT_CONFIG_PATH = get_abs_path("config/agent.yml")
+AGENT_CONFIG_PATH = get_abs_path("model/config/agent.yml")
 
 
 def _looks_like_env_var(value: str) -> bool:
@@ -64,7 +64,7 @@ def _load_connection_defaults() -> tuple[str, str, str]:
     if _looks_like_env_var(key_value):
         status = (
             "当前 `OPENAI_API_KEY` 配置为环境变量名，"
-            "请在下方填写真实密钥后自动写入 `config/agent.yml`。"
+            "请在下方填写真实密钥后自动写入 `model/config/agent.yml`。"
         )
         return base_url, "", status
 
@@ -97,7 +97,7 @@ def save_connection_settings(openai_base_url: str, openai_api_key: str) -> str:
     os.environ["SILICONFLOW_API_KEY"] = api_key
 
     return (
-        f"✅ 已自动保存到 `config/agent.yml`："
+        f"✅ 已自动保存到 `model/config/agent.yml`："
         f"API 地址 `{base_url}`，API Key `{_mask_secret(api_key)}`。"
     )
 
@@ -324,7 +324,7 @@ def build_app() -> gr.Blocks:
         with gr.Group(elem_classes=["card"]):
             gr.Markdown("### 🔐 OpenAI 连接设置")
             gr.Markdown(
-                "在主页直接填写 OpenAI 兼容 API 地址与密钥。输入框失焦后将自动写入 `config/agent.yml`。"
+                "在主页直接填写 OpenAI 兼容 API 地址与密钥。输入框失焦后将自动写入 `model/config/agent.yml`。"
             )
             with gr.Row():
                 openai_base_url_input = gr.Textbox(

@@ -42,7 +42,7 @@ def _validate_openai_api_key_startup() -> None:
         return
 
     raise RuntimeError(
-        "启动失败：config/agent.yml 中已声明 OPENAI_API_KEY="
+        "启动失败：model/config/agent.yml 中已声明 OPENAI_API_KEY="
         f"{config_value}，但当前环境变量未设置或为空。\n"
         f"请先在系统环境变量中配置 {config_value} 后再启动。"
     )

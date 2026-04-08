@@ -67,7 +67,7 @@ pip install -r requirements.txt
 
 ### (2) 配置模型
 
-编辑 `config/agent.yml` 或设置环境变量：
+编辑 `model/config/agent.yml` 或设置环境变量：
 
 - `OPENAI_API_KEY`（可填环境变量名，如 `SILICONFLOW_API_KEY`）
 - `openai_base_url`（默认 `https://api.siliconflow.cn/v1`）

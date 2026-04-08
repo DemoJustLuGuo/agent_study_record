@@ -57,18 +57,6 @@ echo [INFO] Dependency installation completed.
 
 if "%OPENAI_API_KEY%"=="" if not "%SILICONFLOW_API_KEY%"=="" set "OPENAI_API_KEY=%SILICONFLOW_API_KEY%"
 
-if "%OPENAI_API_KEY%"=="" if exist ".env" (
-    for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
-        if /I "%%A"=="OPENAI_API_KEY" set "OPENAI_API_KEY=%%B"
-    )
-)
-
-if "%OPENAI_API_KEY%"=="" if exist ".env" (
-    for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
-        if /I "%%A"=="SILICONFLOW_API_KEY" set "OPENAI_API_KEY=%%B"
-    )
-)
-
 if "%OPENAI_API_KEY%"=="" (
     echo [WARN]  没有设置 OPENAI_API_KEY.
     set /p OPENAI_API_KEY=Please input OpenAI-compatible API key [sk-...]: 

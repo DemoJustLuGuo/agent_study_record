@@ -1,26 +1,44 @@
 $ErrorActionPreference = "Stop"
 
-chcp 65001
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = "UTF-8"
 $env:PYTHONLEGACYWINDOWSSTDIO = ""
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $projectRoot
 
-$pythonExe = $null
-$venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
-$legacyVenvPython = Join-Path $projectRoot "venv\Scripts\python.exe"
-if (Test-Path -LiteralPath $venvPython) {
-    $pythonExe = $venvPython
-} elseif (Test-Path -LiteralPath $legacyVenvPython) {
-    $pythonExe = $legacyVenvPython
+$candidates = @()
+if ($isWindows) {
+    $candidates += (Join-Path $projectRoot ".venv\Scripts\python.exe")
+    $candidates += (Join-Path $projectRoot "venv\Scripts\python.exe")
 } else {
-    $pythonExe = "python"
+    $candidates += (Join-Path $projectRoot ".venv/bin/python")
+    $candidates += (Join-Path $projectRoot "venv/bin/python")
+}
+$candidates += "python3"
+$candidates += "python"
+
+$pythonExe = $null
+foreach ($candidate in $candidates) {
+    if ($candidate -in @("python", "python3")) {
+        if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+            $pythonExe = $candidate
+            break
+        }
+    } elseif (Test-Path -LiteralPath $candidate) {
+        $pythonExe = $candidate
+        break
+    }
 }
 
-try {
-    & $pythonExe --version *> $null
-} catch {
+if (-not $pythonExe) {
+    Write-Host "[ERROR] Python not found. Please install Python 3.10+ or create .venv."
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
+& $pythonExe --version *> $null
+if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] Python not found. Please install Python 3.10+ or create .venv."
     Read-Host "Press Enter to exit"
     exit 1
@@ -69,28 +87,12 @@ if (-not $env:OPENAI_API_KEY -and $env:SILICONFLOW_API_KEY) {
     $env:OPENAI_API_KEY = $env:SILICONFLOW_API_KEY
 }
 
-if (-not $env:OPENAI_API_KEY -and (Test-Path -LiteralPath ".env")) {
-    Get-Content -LiteralPath ".env" | ForEach-Object {
-        if ($_ -match '^\s*OPENAI_API_KEY\s*=\s*(.*)\s*$') {
-            $env:OPENAI_API_KEY = $Matches[1].Trim()
-        }
-    }
-}
-
-if (-not $env:OPENAI_API_KEY -and (Test-Path -LiteralPath ".env")) {
-    Get-Content -LiteralPath ".env" | ForEach-Object {
-        if ($_ -match '^\s*SILICONFLOW_API_KEY\s*=\s*(.*)\s*$') {
-            $env:OPENAI_API_KEY = $Matches[1].Trim()
-        }
-    }
-}
-
 if (-not $env:OPENAI_API_KEY) {
     $env:OPENAI_API_KEY = Read-Host "Please input OpenAI-compatible API key [sk-...]"
 }
 
 if (-not $env:OPENAI_API_KEY) {
-    Write-Host "[ERROR] 已经包含了OPENAI_API_KEY."
+    Write-Host "[ERROR] 缺少 OPENAI_API_KEY。"
     Read-Host "Press Enter to exit"
     exit 1
 }
@@ -106,7 +108,8 @@ if (-not $env:BACKEND_URL) { $env:BACKEND_URL = "http://$($env:APP_HOST):$($env:
 if (-not $env:PYTHONPATH) {
     $env:PYTHONPATH = $projectRoot
 } else {
-    $env:PYTHONPATH = "$projectRoot;$($env:PYTHONPATH)"
+    $separator = if ($isWindows) { ";" } else { ":" }
+    $env:PYTHONPATH = "$projectRoot$separator$($env:PYTHONPATH)"
 }
 
 Write-Host "[INFO] 正在启动WebUI..."

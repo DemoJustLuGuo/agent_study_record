@@ -1,6 +1,7 @@
 # 通信系统智能体项目（Agent + RAG）
 
-基于 `LangChain + LangGraph + Gradio + ChromaDB` 的通信领域智能体项目，支持 ReAct 工具调用、知识库检索增强（RAG）、长时记忆、以及知识库生命周期管理（同步/快照/回滚）。
+基于 `LangChain + LangGraph + Gradio + ChromaDB` 的通信领域智能体项目，支持 ReAct 工具调用、知识库检索增强（RAG）、长时记忆，以及知识库生命周期管理（同步/快照/回滚）。
+
 ## 核心能力
 
 - 通信领域 ReAct 智能体
@@ -16,6 +17,7 @@
 - `langchain==1.2.11`
 - `langchain-core==1.2.18`
 - `langgraph==1.1.0`
+- `langgraph-prebuilt==1.0.8`（与当前 `langgraph` 版本保持兼容）
 - `langchain-chroma==1.1.0`
 - `chromadb==1.5.5`
 - `langchain-openai`（OpenAI 兼容接口，当前默认 SiliconFlow）
@@ -88,6 +90,10 @@ python -m app.main
 
 ```bat
 launch.bat
+```
+
+```powershell
+.\Launch.ps1
 ```
 
 默认访问地址：`http://127.0.0.1:7860`

@@ -20,7 +20,7 @@
 | LangChain Chroma | 1.1.0 | 向量存储持久化 |
 | ChromaDB | 1.5.5 | 底层向量数据库 |
 | LangChain Experimental | latest | PythonREPLTool |
-| Flask | 3.1.3 | REST API 服务层 |
+| Gradio | 5.49.1 | Web UI 服务层 |
 | LLM Provider | SiliconFlow (MiniMax-M2.5) | OpenAI 兼容 API |
 | Embedding | Qwen3-Embedding-8B (SiliconFlow) | 文本向量化 |
 
@@ -201,7 +201,7 @@ if __name__ == "__main__":
 
 ### Step 6 — 端到端验证
 
-启动 Flask 后端，在 Electron 桌面端发送包含协议解析需求的提问，
+启动 Gradio 服务后，在“智能体对话”页签发送包含协议解析需求的提问，
 确认 Agent 能正确路由并调用新工具，输出结果符合预期。
 
 ### Step 7 — 提交代码

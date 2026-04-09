@@ -1,6 +1,11 @@
 import gradio as gr
 
-from app.runtime import prepare_rag_loading, rag_query
+from app.runtime import (
+    prepare_rag_loading,
+    rag_query,
+    refresh_rag_metrics_panel,
+    reset_rag_metrics_panel,
+)
 
 
 def build_rag_tab() -> None:
@@ -43,4 +48,32 @@ def build_rag_tab() -> None:
             inputs=[rag_input],
             outputs=[rag_answer, rag_refs],
             api_name="rag_query",
+        )
+
+        gr.HTML('<div class="section-divider"></div>')
+        with gr.Group():
+            gr.Markdown("### 📊 检索运行指标")
+            gr.Markdown("展示当前会话窗口内的 RAG 检索运行统计。")
+            with gr.Row():
+                metrics_refresh_btn = gr.Button("🔄 刷新指标", variant="secondary")
+                metrics_reset_btn = gr.Button("🧹 重置指标", variant="secondary")
+            metrics_panel = gr.Markdown(
+                "### 📈 在线 RAG 指标\n> 暂无运行数据。",
+                elem_classes=["markdown-body"],
+                line_breaks=True,
+            )
+
+        metrics_refresh_btn.click(
+            fn=refresh_rag_metrics_panel,
+            inputs=None,
+            outputs=[metrics_panel],
+            show_progress="hidden",
+            api_name="rag_metrics_refresh",
+        )
+        metrics_reset_btn.click(
+            fn=reset_rag_metrics_panel,
+            inputs=None,
+            outputs=[metrics_panel],
+            show_progress="hidden",
+            api_name="rag_metrics_reset",
         )

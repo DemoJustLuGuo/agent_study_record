@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from rag.metrics import get_rag_metrics_markdown, record_rag_metric, reset_rag_metrics
 from utils.path_tools import get_abs_path
 from utils.log import logger
 
@@ -200,6 +201,24 @@ def _answer_to_markdown(answer: str, reference_count: int) -> str:
     )
 
 
+def _retrieval_debug_to_markdown(debug_info: dict[str, Any]) -> str:
+    if not debug_info:
+        return ""
+    return "\n".join(
+        [
+            "",
+            "---",
+            "#### 检索调试信息",
+            f"- 策略：`{debug_info.get('strategy', 'unknown')}`",
+            f"- 向量命中：`{debug_info.get('vector_hits', 0)}`",
+            f"- 关键词命中：`{debug_info.get('keyword_hits', 0)}`",
+            f"- 候选数：`{debug_info.get('candidate_count', 0)}`",
+            f"- 目标返回：`{debug_info.get('final_k', 0)}`",
+            f"- 检索耗时：`{debug_info.get('elapsed_ms', 0)} ms`",
+        ]
+    )
+
+
 def prepare_rag_loading(prompt: str) -> tuple[str, str]:
     if not (prompt or "").strip():
         return "请输入问题。", ""
@@ -297,16 +316,51 @@ def rag_query(prompt: str):
         result = get_rag_service().answer_with_references(query)
     except Exception:
         logger.exception("[rag] query failed")
+        record_rag_metric(
+            {
+                "ok": False,
+                "strategy": "error",
+                "reference_count": 0,
+                "candidate_count": 0,
+                "retrieval_ms": 0,
+                "rerank_ms": 0,
+                "llm_ms": 0,
+                "total_ms": 0,
+            }
+        )
         return "⚠️ 系统错误：RAG 查询失败，请稍后重试。", ""
 
     answer = _answer_to_markdown(
         result.get("answer", ""),
         len(result.get("references", [])),
     )
+    answer += _retrieval_debug_to_markdown(result.get("retrieval_debug", {}))
     references = _render_references(result.get("references", []))
     refs_md = _references_to_markdown(references)
+    metrics = result.get("metrics", {})
+    record_rag_metric(
+        {
+            "ok": True,
+            "strategy": metrics.get("strategy", "unknown"),
+            "reference_count": metrics.get("reference_count", len(references)),
+            "candidate_count": metrics.get("candidate_count", 0),
+            "retrieval_ms": metrics.get("retrieval_ms", 0),
+            "rerank_ms": metrics.get("rerank_ms", 0),
+            "llm_ms": metrics.get("llm_ms", 0),
+            "total_ms": metrics.get("total_ms", 0),
+        }
+    )
     logger.info("[rag] query done refs=%s", len(references))
     return answer, refs_md
+
+
+def refresh_rag_metrics_panel() -> str:
+    return get_rag_metrics_markdown()
+
+
+def reset_rag_metrics_panel() -> str:
+    reset_message = reset_rag_metrics()
+    return "\n".join(["### 📈 在线 RAG 指标", f"> {reset_message}"])
 
 
 def ingest_web_urls(urls_text: str, operator: str):

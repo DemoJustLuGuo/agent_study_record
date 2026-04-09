@@ -5,7 +5,7 @@
 ## 核心能力
 
 - 通信领域 ReAct 智能体
-- RAG 检索问答（返回答案 + 引用片段）
+- RAG 检索问答（Hybrid 召回 + 启发式重排 + 引用片段）
 - 长时记忆写入与检索（`store_memory` / `search_memory`）
 - 在线知识库上传与管理（文本上传 + 网页链接抓取入库）
 - 工具调用过程可观测（日志 + Trace）
@@ -105,6 +105,8 @@ Launch.ps1
 
 - 智能体对话：流式 ReAct 交互
 - 在线 RAG：`rag_query`
+  - `rag_metrics_refresh`
+  - `rag_metrics_reset`
 - 知识库管理：
   - `knowledge_upload`
   - `knowledge_web_ingest`
@@ -125,6 +127,7 @@ python rag/vector_store.py rollback <snapshot_name>
 
 - 普通日志：`logs/*.log`
 - Trace 日志：`logs/traces/<trace_id>.jsonl`
+- 在线 RAG 指标面板：查询成功率、空命中率、平均检索/重排/生成耗时、策略分布
 - 中间件覆盖：
   - 工具调用开始/结束/异常
   - 模型调用前后与耗时

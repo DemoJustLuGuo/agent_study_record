@@ -1,6 +1,33 @@
 collection_name: agent
 persist_directory: chroma_db
 k: 3
+retrieval:
+  top_k: 3
+  final_k: 3
+  vector_k: 8
+  keyword_k: 8
+  candidate_k: 12
+  hybrid_enabled: true
+  keyword_enabled: true
+  rrf_k: 60
+  keyword:
+    cache_ttl_seconds: 60
+  rerank:
+    enabled: true
+    final_k: 3
+    target_chunk_length: 360
+    weights:
+      coverage: 1.8
+      phrase: 1.0
+      position: 0.6
+      vector_rank: 0.4
+      source_boost: 0.4
+      length_penalty: 0.35
+    source_type_weights:
+      file_scan: 0.2
+      text_upload: 0.1
+      web_url: 0.0
+      default: 0.0
 data_path: data
 md5_hex_store: md5.text
 index_manifest_store: chroma_manifest.json
@@ -35,6 +62,39 @@ web_source:
 
 chunk_size: 200
 chunk_overlap: 20
+
+chunking:
+  default:
+    chunk_size: 200
+    chunk_overlap: 20
+    separators:
+      - "\n\n"
+      - "\n### "
+      - "\n## "
+      - "\n# "
+      - "\n|"
+      - "\n- "
+      - "\n"
+      - "$$"
+      - "$"
+      - "。"
+      - "；"
+      - "，"
+      - ". "
+      - "; "
+      - ", "
+      - " "
+  source_type:
+    web_url:
+      chunk_size: 300
+      chunk_overlap: 40
+  file_type:
+    md:
+      chunk_size: 260
+      chunk_overlap: 40
+    csv:
+      chunk_size: 420
+      chunk_overlap: 20
 
 separator:
   - "\n\n"

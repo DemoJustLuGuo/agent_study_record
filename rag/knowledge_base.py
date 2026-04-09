@@ -21,4 +21,7 @@ class KnowledgeBaseService:
     def rollback_snapshot(self, snapshot_name:str) -> str:
         return self.vector_store.rollback_snapshot(snapshot_name=snapshot_name)
 
+    def upsert_web_urls(self, urls:list[str], operator:str="admin") -> dict[str, object]:
+        return self.vector_store.upsert_web_urls(urls=urls, operator=operator)
+
 

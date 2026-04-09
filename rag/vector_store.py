@@ -6,6 +6,10 @@ import shutil
 import threading
 import time
 from datetime import datetime
+from html.parser import HTMLParser
+from urllib.error import URLError
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -15,6 +19,46 @@ from model.factory import embeddings_model
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from utils.file_handler import get_file_md5_hex, load_documents_by_path
 from utils.log import logger
+
+
+class _HTMLTextExtractor(HTMLParser):
+    _BLOCK_TAGS = {
+        "p", "div", "br", "li", "tr", "td", "th", "section", "article",
+        "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre",
+    }
+    _SKIP_TAGS = {"script", "style", "noscript", "svg"}
+
+    def __init__(self):
+        super().__init__()
+        self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP_TAGS:
+            self._skip_depth += 1
+            return
+        if tag in self._BLOCK_TAGS:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+            return
+        if tag in self._BLOCK_TAGS:
+            self._parts.append("\n")
+
+    def handle_data(self, data):
+        if self._skip_depth > 0:
+            return
+        text = (data or "").strip()
+        if text:
+            self._parts.append(text)
+
+    def get_text(self) -> str:
+        raw = " ".join(self._parts)
+        lines = [" ".join(line.split()) for line in raw.splitlines()]
+        return "\n".join(line for line in lines if line).strip()
+
 
 class VectorStoreService:
     _auto_sync_lock = threading.Lock()
@@ -277,6 +321,159 @@ class VectorStoreService:
 
         logger.info(f"文本{filename}已成功上传到向量数据库")
         return "【成功】内容已成功添加到知识库中"
+
+    @staticmethod
+    def _normalize_web_url(url:str) -> str:
+        text = (url or "").strip()
+        if not text:
+            return ""
+        parsed = urlparse(text)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ""
+        return parsed.geturl()
+
+    @staticmethod
+    def _fetch_web_text(url:str, timeout_seconds:float, user_agent:str, max_content_chars:int) -> str:
+        request = Request(url, headers={"User-Agent": user_agent})
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                raw = response.read(max(max_content_chars * 2, 4096))
+                charset = response.headers.get_content_charset() or "utf-8"
+                text = raw.decode(charset, errors="replace")
+                content_type = str(response.headers.get("Content-Type", "")).lower()
+        except URLError as error:
+            raise RuntimeError(f"网络请求失败: {error}") from error
+
+        if "html" in content_type or "<html" in text.lower():
+            parser = _HTMLTextExtractor()
+            parser.feed(text)
+            parsed_text = parser.get_text()
+        else:
+            parsed_text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+
+        if len(parsed_text) > max_content_chars:
+            return parsed_text[:max_content_chars]
+        return parsed_text
+
+    def upsert_web_urls(self, urls:list[str], operator:str="admin") -> dict[str, object]:
+        web_conf = chroma_conf.get("web_source", {})
+        timeout_seconds = float(web_conf.get("timeout_seconds", 20))
+        min_content_chars = int(web_conf.get("min_content_chars", 80))
+        max_content_chars = int(web_conf.get("max_content_chars", 50000))
+        user_agent = str(
+            web_conf.get(
+                "user_agent",
+                "Mozilla/5.0 (compatible; AgentStudyRAG/1.0; +https://example.local)",
+            )
+        )
+
+        manifest = self._load_manifest()
+        added = 0
+        updated = 0
+        skipped = 0
+        failed = 0
+        details:list[dict[str, str]] = []
+
+        for raw_url in urls:
+            url = self._normalize_web_url(raw_url)
+            if not url:
+                failed += 1
+                details.append({"url": raw_url, "status": "failed", "reason": "invalid_url"})
+                continue
+
+            source = f"url::{url}"
+            try:
+                content = self._fetch_web_text(
+                    url=url,
+                    timeout_seconds=timeout_seconds,
+                    user_agent=user_agent,
+                    max_content_chars=max_content_chars,
+                )
+            except Exception as error:
+                failed += 1
+                details.append({"url": url, "status": "failed", "reason": str(error)})
+                continue
+
+            if len(content) < min_content_chars:
+                failed += 1
+                details.append(
+                    {"url": url, "status": "failed", "reason": f"content_too_short:{len(content)}"}
+                )
+                continue
+
+            md5_hex = hashlib.md5(content.encode("utf-8")).hexdigest()
+            old_entry = manifest.get(source, {})
+            old_md5 = str(old_entry.get("md5", ""))
+
+            if old_md5 == md5_hex and self._check_md5_hex(md5_hex):
+                skipped += 1
+                details.append({"url": url, "status": "skipped", "reason": "unchanged"})
+                continue
+
+            if old_md5 and old_md5 != md5_hex:
+                self._delete_vectors_by_source(source)
+                is_update = True
+            else:
+                is_update = bool(old_entry)
+
+            if not old_entry and self._check_md5_hex(md5_hex):
+                manifest[source] = self._manifest_entry(
+                    md5_hex=md5_hex,
+                    source_type="web_url",
+                    operator=operator,
+                )
+                skipped += 1
+                details.append({"url": url, "status": "skipped", "reason": "duplicate_content"})
+                continue
+
+            chunks = self.spliter.split_text(content) if len(content) > chroma_conf["chunk_size"] else [content]
+            chunks = [chunk for chunk in chunks if str(chunk).strip()]
+            if not chunks:
+                failed += 1
+                details.append({"url": url, "status": "failed", "reason": "empty_chunks"})
+                continue
+
+            indexed_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            metadata = {
+                "source": source,
+                "url": url,
+                "source_md5": md5_hex,
+                "source_type": "web_url",
+                "indexed_at": indexed_time,
+                "operator": operator,
+            }
+            self.vector_store.add_texts(chunks, metadatas=[metadata for _ in chunks])
+            manifest[source] = self._manifest_entry(
+                md5_hex=md5_hex,
+                source_type="web_url",
+                operator=operator,
+            )
+
+            if is_update:
+                updated += 1
+                details.append({"url": url, "status": "updated"})
+            else:
+                added += 1
+                details.append({"url": url, "status": "added"})
+
+        self._save_manifest(manifest)
+        self._sync_md5_store_with_manifest(manifest)
+
+        logger.info(
+            "网页入库完成: 新增=%s, 更新=%s, 跳过=%s, 失败=%s",
+            added,
+            updated,
+            skipped,
+            failed,
+        )
+        return {
+            "added": added,
+            "updated": updated,
+            "skipped": skipped,
+            "failed": failed,
+            "total": len(urls),
+            "details": details,
+        }
         
     def get_retriever(self):
         if self.enable_auto_sync and self.auto_sync_before_retrieval:

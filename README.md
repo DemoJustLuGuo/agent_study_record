@@ -7,7 +7,7 @@
 - 通信领域 ReAct 智能体
 - RAG 检索问答（返回答案 + 引用片段）
 - 长时记忆写入与检索（`store_memory` / `search_memory`）
-- 在线知识库上传与管理
+- 在线知识库上传与管理（文本上传 + 网页链接抓取入库）
 - 工具调用过程可观测（日志 + Trace）
 
 ## 技术栈
@@ -31,8 +31,11 @@ agent_study_record/
 ├─ agent/                  # ReactAgent、middleware、tools
 ├─ rag/                    # 向量库/RAG/知识库/记忆服务
 ├─ model/                  # ChatModel 与 Embedding 工厂
-├─ config/                 # 运行配置（agent/chroma/prompts/rag）
-├─ prompts/                # 系统提示词与 RAG 提示词
+├─ model/config/           # 模型与推理配置
+├─ rag/config/             # 向量检索参数与网页抓取参数
+├─ agent/config/           # 提示词路径映射
+├─ agent/prompts/          # Agent 提示词
+├─ rag/prompts/            # RAG 提示词
 ├─ data/                   # 知识源文件
 ├─ chroma_db/              # 向量库持久化
 └─ logs/                   # 运行日志与 trace
@@ -82,18 +85,16 @@ python rag/vector_store.py load
 
 ### (4) 启动应用
 
-```bash
-python -m app.main
-```
-
-或 Windows 下使用：
+Windows：
 
 ```bat
 launch.bat
 ```
 
+PowerShell：
+
 ```powershell
-.\Launch.ps1
+Launch.ps1
 ```
 
 默认访问地址：`http://127.0.0.1:7860`
@@ -106,6 +107,7 @@ launch.bat
 - 在线 RAG：`rag_query`
 - 知识库管理：
   - `knowledge_upload`
+  - `knowledge_web_ingest`
   - `knowledge_sync`
   - `knowledge_snapshot`
   - `knowledge_rollback`

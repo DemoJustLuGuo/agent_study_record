@@ -180,11 +180,69 @@ def _references_to_markdown(references: list[dict[str, Any]]) -> str:
         return "> 暂无匹配的参考片段。"
     lines = ["### 📚 命中参考片段\n"]
     for i, item in enumerate(references, 1):
-        content = item.get("content", "").strip()
+        content = " ".join(item.get("content", "").strip().split())
+        if len(content) > 260:
+            content = content[:260] + "...（已截断）"
         metadata = item.get("metadata", {})
         source = metadata.get("source", "未知来源")
-        lines.append(f"**[{i}]** `{source}`\n")
+        source_type = metadata.get("source_type", "unknown")
+        lines.append(f"#### [{i}] `{source}`\n")
+        lines.append(f"- 类型：`{source_type}`\n")
         lines.append(f"> {content}\n")
+    return "\n".join(lines)
+
+
+def _answer_to_markdown(answer: str, reference_count: int) -> str:
+    body = (answer or "").strip() or "未生成有效回答。"
+    return "\n".join(
+        [
+            "### 🧠 检索回答",
+            f"> 命中参考片段：**{reference_count}**",
+            "",
+            body,
+        ]
+    )
+
+
+def _prepare_rag_loading(prompt: str) -> tuple[str, str]:
+    if not (prompt or "").strip():
+        return "请输入问题。", ""
+    return "### 🔎 正在搜索...\n请稍候，正在检索知识库并生成回答。", ""
+
+
+def _parse_web_urls(urls_text: str) -> list[str]:
+    raw = (urls_text or "").replace(",", "\n")
+    urls = [line.strip() for line in raw.splitlines() if line.strip()]
+    # 保序去重
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for url in urls:
+        if url in seen:
+            continue
+        seen.add(url)
+        ordered.append(url)
+    return ordered
+
+
+def _web_ingest_result_to_markdown(result: dict[str, Any]) -> str:
+    details = result.get("details", [])
+    lines = [
+        "### 🌐 网页入库结果",
+        f"- 总数：`{result.get('total', 0)}`",
+        f"- 新增：`{result.get('added', 0)}`",
+        f"- 更新：`{result.get('updated', 0)}`",
+        f"- 跳过：`{result.get('skipped', 0)}`",
+        f"- 失败：`{result.get('failed', 0)}`",
+        "",
+    ]
+    if details:
+        lines.append("#### 详情")
+        for item in details:
+            url = item.get("url", "-")
+            status = item.get("status", "-")
+            reason = item.get("reason", "")
+            reason_text = f"（{reason}）" if reason else ""
+            lines.append(f"- `{status}` {url} {reason_text}")
     return "\n".join(lines)
 
 
@@ -235,14 +293,34 @@ def rag_query(prompt: str):
         return "请输入问题。", ""
 
     try:
+        logger.info("[rag] query start len=%s", len(query))
         result = get_rag_service().answer_with_references(query)
     except Exception:
+        logger.exception("[rag] query failed")
         return "⚠️ 系统错误：RAG 查询失败，请稍后重试。", ""
 
-    answer = result.get("answer", "")
+    answer = _answer_to_markdown(
+        result.get("answer", ""),
+        len(result.get("references", [])),
+    )
     references = _render_references(result.get("references", []))
     refs_md = _references_to_markdown(references)
+    logger.info("[rag] query done refs=%s", len(references))
     return answer, refs_md
+
+
+def ingest_web_urls(urls_text: str, operator: str):
+    urls = _parse_web_urls(urls_text)
+    if not urls:
+        return "请先输入至少一个 HTTP/HTTPS 链接。"
+
+    user = (operator or "gradio").strip() or "gradio"
+    try:
+        result = get_knowledge_base_service().upsert_web_urls(urls=urls, operator=user)
+    except Exception:
+        logger.exception("[rag] web ingest failed")
+        return "⚠️ 系统错误：网页抓取/入库失败。"
+    return _web_ingest_result_to_markdown(result)
 
 
 def upload_knowledge(file_path: str, operator: str):
@@ -431,6 +509,11 @@ def build_app() -> gr.Blocks:
                         )
 
                 rag_btn.click(
+                    fn=_prepare_rag_loading,
+                    inputs=[rag_input],
+                    outputs=[rag_answer, rag_refs],
+                    show_progress="hidden",
+                ).then(
                     fn=rag_query,
                     inputs=[rag_input],
                     outputs=[rag_answer, rag_refs],
@@ -474,6 +557,33 @@ def build_app() -> gr.Blocks:
                     inputs=[upload_file, operator],
                     outputs=[upload_result],
                     api_name="knowledge_upload",
+                )
+
+                with gr.Group():
+                    gr.Markdown("### 🌐 网页链接入库")
+                    gr.Markdown("每行输入一个 HTTP/HTTPS 链接，点击后手动抓取并重建对应索引。")
+                    web_urls_input = gr.Textbox(
+                        label="网页链接",
+                        lines=5,
+                        placeholder="https://example.com/doc1\nhttps://example.com/doc2",
+                        show_label=False,
+                    )
+                    web_ingest_btn = gr.Button(
+                        "🌐 抓取网页并入库",
+                        variant="primary",
+                        size="lg",
+                    )
+                    web_ingest_result = gr.Markdown(
+                        "等待执行网页入库任务。",
+                        elem_classes=["markdown-body"],
+                    )
+
+                web_ingest_btn.click(
+                    fn=ingest_web_urls,
+                    inputs=[web_urls_input, operator],
+                    outputs=[web_ingest_result],
+                    show_progress="full",
+                    api_name="knowledge_web_ingest",
                 )
 
                 gr.HTML('<div class="section-divider"></div>')

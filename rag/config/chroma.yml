@@ -27,6 +27,11 @@ document_loader:
     infer_table_structure: true
     pypdf_mode: page
     pypdf_extraction_mode: layout
+web_source:
+  timeout_seconds: 20
+  min_content_chars: 80
+  max_content_chars: 50000
+  user_agent: "Mozilla/5.0 (compatible; AgentStudyRAG/1.0; +https://example.local)"
 
 chunk_size: 200
 chunk_overlap: 20

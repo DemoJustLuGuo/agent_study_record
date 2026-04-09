@@ -16,6 +16,16 @@ def truncate_output(text:str) -> str:
     return text[:TOOL_OUTPUT_MAX_CHARS] + "\n...[输出过长，已截断]"
 
 
+def format_tool_failure(tool_name: str, reason: str, solution: str) -> str:
+    return "\n".join(
+        [
+            f"【失败】{tool_name}调用失败",
+            f"原因：{(reason or '未知错误').strip()}",
+            f"解决方案：{(solution or '请检查工具依赖与输入参数后重试。').strip()}",
+        ]
+    )
+
+
 def run_subprocess(command:list[str], tool_name:str) -> str:
     try:
         completed = subprocess.run(
@@ -28,10 +38,18 @@ def run_subprocess(command:list[str], tool_name:str) -> str:
             timeout=TOOL_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
-        return f"【失败】{tool_name}执行超时（>{TOOL_TIMEOUT_SECONDS}s）"
+        return format_tool_failure(
+            tool_name=tool_name,
+            reason=f"执行超时（>{TOOL_TIMEOUT_SECONDS}s）",
+            solution="请缩小输入规模、减少命令复杂度，或调大超时阈值后重试。",
+        )
     except Exception as exc:
         logger.error(f"{tool_name}执行失败: {str(exc)}", exc_info=True)
-        return f"【失败】{tool_name}执行异常: {str(exc)}"
+        return format_tool_failure(
+            tool_name=tool_name,
+            reason=f"执行异常: {str(exc)}",
+            solution="请检查运行环境、命令参数与依赖安装状态后重试。",
+        )
 
     parts:list[str] = [
         f"tool={tool_name}",

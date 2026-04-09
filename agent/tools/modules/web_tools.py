@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 
 from langchain_core.tools import tool
 
-from agent.tools.modules.shared import load_text_from_url, truncate_output
+from agent.tools.modules.shared import format_tool_failure, load_text_from_url, truncate_output
 from utils.log import logger
 
 WEB_SEARCH_TIMEOUT_SECONDS = 15
@@ -54,12 +54,20 @@ def _parse_bing_rss_items(rss_text:str, max_items:int=5) -> list[str]:
 def web_search(query:str) -> str:
     query = (query or "").strip()
     if not query:
-        return "【失败】web_search查询为空"
+        return format_tool_failure(
+            tool_name="web_search",
+            reason="查询为空",
+            solution="请提供明确的联网检索关键词后重试。",
+        )
 
     bing_rss_url = BING_CN_SEARCH_URL + quote(query) + "&format=rss&setlang=zh-cn"
     rss_text = load_text_from_url(bing_rss_url, timeout=WEB_SEARCH_TIMEOUT_SECONDS)
     if rss_text is None:
-        return "【失败】web_search联网请求失败，请稍后重试"
+        return format_tool_failure(
+            tool_name="web_search",
+            reason="联网请求失败",
+            solution="请检查网络连通性或代理设置，稍后重试；也可先使用本地知识库工具。",
+        )
 
     snippets = _parse_bing_rss_items(rss_text, max_items=5)
     if not snippets:

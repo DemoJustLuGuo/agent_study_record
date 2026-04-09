@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool
 
+from agent.tools.modules.shared import format_tool_failure
+
 if TYPE_CHECKING:
     from rag.rag_service import RAGSummarizeService
 
@@ -23,4 +25,11 @@ def _get_rag_service() -> "RAGSummarizeService":
 
 @tool(description="从向量存储中检索参考资料")
 def rag_summarize(query:str) -> str:
-    return _get_rag_service().rag_summarize(query)
+    try:
+        return _get_rag_service().rag_summarize(query)
+    except Exception as exc:
+        return format_tool_failure(
+            tool_name="rag_summarize",
+            reason=f"检索异常: {str(exc)}",
+            solution="请检查向量库状态与模型连接；必要时先在知识库管理页执行同步后重试。",
+        )

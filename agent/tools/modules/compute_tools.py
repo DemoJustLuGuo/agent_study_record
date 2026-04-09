@@ -2,7 +2,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from agent.tools.modules.shared import truncate_output
+from agent.tools.modules.shared import format_tool_failure, truncate_output
 from utils.log import logger
 
 try:
@@ -62,7 +62,11 @@ def _normalize_result(prefix:str, result:Any) -> str:
 def python(code:str) -> str:
     code = (code or "").strip()
     if not code:
-        return "【失败】python代码为空"
+        return format_tool_failure(
+            tool_name="python",
+            reason="代码为空",
+            solution="请提供可执行的 Python 代码片段后重试。",
+        )
 
     try:
         python_tool = _get_python_repl_tool()
@@ -73,14 +77,22 @@ def python(code:str) -> str:
         return _normalize_result("python", result)
     except Exception as exc:
         logger.error(f"python执行失败: {str(exc)}", exc_info=True)
-        return f"【失败】python执行异常: {str(exc)}"
+        return format_tool_failure(
+            tool_name="python",
+            reason=f"执行异常: {str(exc)}",
+            solution="请检查 Python 依赖安装（如 numpy/scipy/matplotlib）或改写为无外部依赖代码后重试。",
+        )
 
 
 @tool(description="执行MATLAB代码并返回执行结果，基于matlabengine模块")
 def matlab(code:str) -> str:
     code = (code or "").strip()
     if not code:
-        return "【失败】matlab代码为空"
+        return format_tool_failure(
+            tool_name="matlab",
+            reason="代码为空",
+            solution="请提供可执行的 MATLAB 代码片段后重试。",
+        )
 
     try:
         engine = _get_matlab_engine()
@@ -88,4 +100,8 @@ def matlab(code:str) -> str:
         return _normalize_result("matlab", result)
     except Exception as exc:
         logger.error(f"matlab执行失败: {str(exc)}", exc_info=True)
-        return f"【失败】matlab执行异常: {str(exc)}"
+        return format_tool_failure(
+            tool_name="matlab",
+            reason=f"执行异常: {str(exc)}",
+            solution="请先安装并配置 MATLAB Engine for Python；若当前环境不支持 MATLAB，请改用 python 工具。",
+        )

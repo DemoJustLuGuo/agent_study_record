@@ -3,6 +3,7 @@ import os
 
 from langchain_core.tools import tool
 
+from agent.tools.modules.shared import format_tool_failure
 from utils.config_handler import rag_conf
 from utils.log import logger
 from utils.path_tools import get_abs_path
@@ -46,12 +47,22 @@ def _generate_external_data() -> None:
 
 @tool(description="从外部系统中获取用户的使用记录，返回JSON字符串；如果未检索到则返回空字符串")
 def fetch_external_data(user_id:str, month:str) -> str:
-    _generate_external_data()
-
-    user_records = _external_data.get(user_id, {})
-    record = user_records.get(month)
-    if record is None:
-        logger.warning(f"未检索到用户{user_id}在{month}的使用记录")
-        return ""
-
-    return json.dumps(record, ensure_ascii=False)
+    try:
+        _generate_external_data()
+        user_records = _external_data.get(user_id, {})
+        record = user_records.get(month)
+        if record is None:
+            logger.warning(f"未检索到用户{user_id}在{month}的使用记录")
+            return format_tool_failure(
+                tool_name="fetch_external_data",
+                reason=f"未检索到 user_id={user_id}, month={month} 的记录",
+                solution="请确认用户ID与月份参数，或改用其他数据来源工具补充证据。",
+            )
+        return json.dumps(record, ensure_ascii=False)
+    except Exception as exc:
+        logger.error(f"fetch_external_data执行失败: {str(exc)}", exc_info=True)
+        return format_tool_failure(
+            tool_name="fetch_external_data",
+            reason=f"执行异常: {str(exc)}",
+            solution="请检查外部数据文件路径、格式与权限后重试。",
+        )

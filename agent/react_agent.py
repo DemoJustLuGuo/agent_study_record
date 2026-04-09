@@ -204,6 +204,27 @@ class ReactAgent:
 
         return cleaned
 
+    @staticmethod
+    def _extract_failure_reason_and_solution(tool_output: str) -> tuple[str, str] | None:
+        text = (tool_output or "").strip()
+        if not text.startswith("【失败】"):
+            return None
+
+        reason = ""
+        solution = ""
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("原因："):
+                reason = line.removeprefix("原因：").strip()
+            if line.startswith("解决方案："):
+                solution = line.removeprefix("解决方案：").strip()
+
+        if not reason:
+            reason = text.removeprefix("【失败】").strip()
+        if not solution:
+            solution = "请根据报错检查工具依赖与输入参数；若当前工具不可用，请改用可用备选工具。"
+        return reason, solution
+
     def _summarize_inline_tool_result(
         self, query: str, tool_name: str, params: dict[str, Any], result: Any
     ) -> str:
@@ -303,7 +324,18 @@ class ReactAgent:
                 # ToolMessage：工具执行结果
                 if chunk_class == "ToolMessage":
                     tool_name = getattr(message_chunk, "name", "") or ""
-                    think_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
+                    tool_result = str(getattr(message_chunk, "content", "") or "")
+                    failure_info = self._extract_failure_reason_and_solution(tool_result)
+                    if failure_info:
+                        reason, solution = failure_info
+                        think_msg = (
+                            f"[THINK] 工具 {tool_name} 调用失败。\n"
+                            f"[THINK] 原因：{reason}\n"
+                            f"[THINK] 解决方案：{solution}\n"
+                            "[THINK] 将尝试使用备选工具；若无可用备选方案，将停止并给出失败说明。"
+                        )
+                    else:
+                        think_msg = f"[THINK] 工具 {tool_name} 执行完成，正在整理结论。"
                     if think_msg not in emitted_status:
                         emitted_status.add(think_msg)
                         logger.debug(

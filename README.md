@@ -27,7 +27,7 @@
 
 ```text
 agent_study_record/
-├─ app/                    # Gradio UI 与入口
+├─ app/                    # Gradio UI（app_builder/runtime/ui/*）与启动入口
 ├─ agent/                  # ReactAgent、middleware、tools
 ├─ rag/                    # 向量库/RAG/知识库/记忆服务
 ├─ model/                  # ChatModel 与 Embedding 工厂
@@ -43,7 +43,7 @@ agent_study_record/
 
 ## 运行链路
 
-1. 用户在 Gradio 输入问题（`app/main.py`）
+1. 用户在 Gradio 输入问题（`app/ui/*.py` 定义界面，`app/runtime.py` 执行回调）
 2. `ReactAgent.execute_stream()` 调用 `create_agent(...)` 流式推理
 3. Agent 通过 `agent/tools/registry.py` 注册工具并按需调用
 4. `agent/middleware.py` 记录模型/工具事件到 `logs/traces/*.jsonl`

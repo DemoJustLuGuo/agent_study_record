@@ -6,7 +6,7 @@ except ModuleNotFoundError:
 import time
 
 st.title("知识库更新服务")
- 
+
 uploader_file = st.file_uploader("请上传txt文件",type=["txt"],accept_multiple_files=False)
 
 if "service" not in st.session_state:

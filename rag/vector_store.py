@@ -373,12 +373,20 @@ class VectorStoreService:
         skipped = 0
         failed = 0
         details:list[dict[str, str]] = []
+        logger.info(
+            "网页入库开始: total=%s operator=%s timeout=%s min_chars=%s",
+            len(urls),
+            operator,
+            timeout_seconds,
+            min_content_chars,
+        )
 
         for raw_url in urls:
             url = self._normalize_web_url(raw_url)
             if not url:
                 failed += 1
                 details.append({"url": raw_url, "status": "failed", "reason": "invalid_url"})
+                logger.warning("网页入库失败: invalid_url raw=%s", raw_url)
                 continue
 
             source = f"url::{url}"
@@ -392,6 +400,7 @@ class VectorStoreService:
             except Exception as error:
                 failed += 1
                 details.append({"url": url, "status": "failed", "reason": str(error)})
+                logger.warning("网页入库失败: url=%s reason=%s", url, error)
                 continue
 
             if len(content) < min_content_chars:
@@ -399,6 +408,7 @@ class VectorStoreService:
                 details.append(
                     {"url": url, "status": "failed", "reason": f"content_too_short:{len(content)}"}
                 )
+                logger.warning("网页入库失败: url=%s content_too_short=%s", url, len(content))
                 continue
 
             md5_hex = hashlib.md5(content.encode("utf-8")).hexdigest()
@@ -408,6 +418,7 @@ class VectorStoreService:
             if old_md5 == md5_hex and self._check_md5_hex(md5_hex):
                 skipped += 1
                 details.append({"url": url, "status": "skipped", "reason": "unchanged"})
+                logger.debug("网页入库跳过: url=%s reason=unchanged", url)
                 continue
 
             if old_md5 and old_md5 != md5_hex:
@@ -424,6 +435,7 @@ class VectorStoreService:
                 )
                 skipped += 1
                 details.append({"url": url, "status": "skipped", "reason": "duplicate_content"})
+                logger.debug("网页入库跳过: url=%s reason=duplicate_content", url)
                 continue
 
             chunks = self.spliter.split_text(content) if len(content) > chroma_conf["chunk_size"] else [content]
@@ -431,6 +443,7 @@ class VectorStoreService:
             if not chunks:
                 failed += 1
                 details.append({"url": url, "status": "failed", "reason": "empty_chunks"})
+                logger.warning("网页入库失败: url=%s reason=empty_chunks", url)
                 continue
 
             indexed_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -452,9 +465,11 @@ class VectorStoreService:
             if is_update:
                 updated += 1
                 details.append({"url": url, "status": "updated"})
+                logger.info("网页入库更新: url=%s chunks=%s", url, len(chunks))
             else:
                 added += 1
                 details.append({"url": url, "status": "added"})
+                logger.info("网页入库新增: url=%s chunks=%s", url, len(chunks))
 
         self._save_manifest(manifest)
         self._sync_md5_store_with_manifest(manifest)

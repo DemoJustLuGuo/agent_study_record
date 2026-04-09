@@ -119,7 +119,10 @@ THINKING_HTML = (
 
 
 def _normalize_markdown_layout(text: str) -> str:
-    return (text or "").replace("\r\n", "\n")
+    normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    if "\\n" in normalized and "\n" not in normalized:
+        normalized = normalized.replace("\\n", "\n")
+    return normalized
 
 
 def get_agent() -> "ReactAgent":
@@ -180,20 +183,21 @@ def _references_to_markdown(references: list[dict[str, Any]]) -> str:
         return "> 暂无匹配的参考片段。"
     lines = ["### 📚 命中参考片段\n"]
     for i, item in enumerate(references, 1):
-        content = " ".join(item.get("content", "").strip().split())
-        if len(content) > 260:
-            content = content[:260] + "...（已截断）"
+        content = _normalize_markdown_layout(item.get("content", "").strip())
+        if len(content) > 420:
+            content = content[:420] + "...（已截断）"
+        quoted_content = "\n".join(f"> {line}" for line in content.splitlines() if line.strip()) or "> （空片段）"
         metadata = item.get("metadata", {})
         source = metadata.get("source", "未知来源")
         source_type = metadata.get("source_type", "unknown")
         lines.append(f"#### [{i}] `{source}`\n")
         lines.append(f"- 类型：`{source_type}`\n")
-        lines.append(f"> {content}\n")
+        lines.append(f"{quoted_content}\n")
     return "\n".join(lines)
 
 
 def _answer_to_markdown(answer: str, reference_count: int) -> str:
-    body = (answer or "").strip() or "未生成有效回答。"
+    body = _normalize_markdown_layout((answer or "").strip()) or "未生成有效回答。"
     return "\n".join(
         [
             "### 🧠 检索回答",
@@ -316,7 +320,16 @@ def ingest_web_urls(urls_text: str, operator: str):
 
     user = (operator or "gradio").strip() or "gradio"
     try:
+        logger.info("[rag] web ingest start urls=%s operator=%s", len(urls), user)
         result = get_knowledge_base_service().upsert_web_urls(urls=urls, operator=user)
+        logger.info(
+            "[rag] web ingest done total=%s added=%s updated=%s skipped=%s failed=%s",
+            result.get("total", 0),
+            result.get("added", 0),
+            result.get("updated", 0),
+            result.get("skipped", 0),
+            result.get("failed", 0),
+        )
     except Exception:
         logger.exception("[rag] web ingest failed")
         return "⚠️ 系统错误：网页抓取/入库失败。"
@@ -500,12 +513,14 @@ def build_app() -> gr.Blocks:
                             show_label=True,
                             container=True,
                             elem_classes=["markdown-body"],
+                            line_breaks=True,
                         )
                         rag_refs = gr.Markdown(
                             label="命中参考片段",
                             show_label=True,
                             container=True,
                             elem_classes=["markdown-body"],
+                            line_breaks=True,
                         )
 
                 rag_btn.click(

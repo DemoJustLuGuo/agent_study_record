@@ -210,6 +210,13 @@ body {
     word-break: break-word !important;
     overflow-wrap: anywhere !important;
 }
+.markdown-body .md {
+    color: var(--text-main) !important;
+    line-height: 1.75 !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+}
 
 /* ========== Markdown Rendering ========== */
 .chatbot .md h1,

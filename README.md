@@ -54,7 +54,6 @@ agent_study_record/
 - `rag_summarize`
 - `web_search`
 - `fill_context_for_report`
-- `fetch_external_data`
 - `python`
 - `matlab`
 - `store_memory`

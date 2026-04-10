@@ -28,7 +28,7 @@ retrieval:
       text_upload: 0.1
       web_url: 0.0
       default: 0.0
-data_path: data
+data_path: rag/data
 md5_hex_store: md5.text
 index_manifest_store: chroma_manifest.json
 lifecycle_snapshot_dir: chroma_snapshots

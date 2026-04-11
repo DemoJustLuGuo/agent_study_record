@@ -4,21 +4,25 @@ import xml.etree.ElementTree as ET
 
 from langchain_core.tools import tool
 
-from agent.tools.modules.shared import format_tool_failure, load_text_from_url, truncate_output
+from agent.tools.modules.shared import (
+    format_tool_failure,
+    load_text_from_url,
+    truncate_output,
+)
 from utils.log import logger
 
 WEB_SEARCH_TIMEOUT_SECONDS = 15
 BING_CN_SEARCH_URL = "https://cn.bing.com/search?q="
 
 
-def _parse_bing_rss_items(rss_text:str, max_items:int=5) -> list[str]:
+def _parse_bing_rss_items(rss_text: str, max_items: int = 5) -> list[str]:
     try:
         root = ET.fromstring(rss_text)
     except ET.ParseError as exc:
         logger.warning(f"必应RSS解析失败: {str(exc)}")
         return []
 
-    snippets:list[str] = []
+    snippets: list[str] = []
     items = root.findall("./channel/item")
 
     rank = 1
@@ -50,8 +54,10 @@ def _parse_bing_rss_items(rss_text:str, max_items:int=5) -> list[str]:
     return snippets
 
 
-@tool(description="联网搜索公开信息并返回前几条结果摘要，适用于标准、术语、参数范围、行业资料快速核验")
-def web_search(query:str) -> str:
+@tool(
+    description="联网搜索公开信息并返回前几条结果摘要，适用于标准、术语、参数范围、行业资料快速核验"
+)
+def web_search(query: str) -> str:
     query = (query or "").strip()
     if not query:
         return format_tool_failure(

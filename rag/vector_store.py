@@ -108,10 +108,14 @@ class VectorStoreService:
         return get_abs_path(chroma_conf["md5_hex_store"])
 
     def _manifest_store_path(self) -> str:
-        return get_abs_path(chroma_conf.get("index_manifest_store", "chroma_manifest.json"))
+        return get_abs_path(
+            chroma_conf.get("index_manifest_store", "chroma_manifest.json")
+        )
 
     def _snapshot_root_path(self) -> str:
-        return get_abs_path(chroma_conf.get("lifecycle_snapshot_dir", "chroma_snapshots"))
+        return get_abs_path(
+            chroma_conf.get("lifecycle_snapshot_dir", "chroma_snapshots")
+        )
 
     def _ensure_parent_dir(self, file_path: str):
         parent_dir = os.path.dirname(file_path)
@@ -155,7 +159,9 @@ class VectorStoreService:
         with open(manifest_store_path, "w", encoding="utf-8") as file_obj:
             json.dump(manifest, file_obj, ensure_ascii=False, indent=2)
 
-    def _manifest_entry(self, md5_hex: str, source_type: str, operator: str) -> dict[str, str]:
+    def _manifest_entry(
+        self, md5_hex: str, source_type: str, operator: str
+    ) -> dict[str, str]:
         return {
             "md5": md5_hex,
             "source_type": source_type,
@@ -165,9 +171,7 @@ class VectorStoreService:
 
     def _sync_md5_store_with_manifest(self, manifest: dict[str, dict]):
         md5_values = {
-            item.get("md5", "")
-            for item in manifest.values()
-            if item.get("md5", "")
+            item.get("md5", "") for item in manifest.values() if item.get("md5", "")
         }
         self._write_md5_store(md5_values)
 
@@ -176,7 +180,9 @@ class VectorStoreService:
             self.vector_store.delete(where={"source": source})
             logger.info(f"已删除source={source}对应向量数据")
         except Exception as error:
-            logger.error(f"删除source={source}对应向量数据失败: {str(error)}", exc_info=True)
+            logger.error(
+                f"删除source={source}对应向量数据失败: {str(error)}", exc_info=True
+            )
 
     def _drop_removed_file_sources(self, manifest: dict[str, dict]) -> list[str]:
         removed_sources: list[str] = []
@@ -223,7 +229,9 @@ class VectorStoreService:
             os.makedirs(snapshot_vector_path, exist_ok=True)
 
         md5_store_path = self._md5_store_path()
-        snapshot_md5_path = os.path.join(snapshot_path, os.path.basename(md5_store_path))
+        snapshot_md5_path = os.path.join(
+            snapshot_path, os.path.basename(md5_store_path)
+        )
         if os.path.exists(md5_store_path):
             shutil.copy2(md5_store_path, snapshot_md5_path)
         else:
@@ -257,7 +265,9 @@ class VectorStoreService:
 
         md5_store_path = self._md5_store_path()
         manifest_store_path = self._manifest_store_path()
-        snapshot_md5_path = os.path.join(snapshot_path, os.path.basename(md5_store_path))
+        snapshot_md5_path = os.path.join(
+            snapshot_path, os.path.basename(md5_store_path)
+        )
         snapshot_manifest_path = os.path.join(
             snapshot_path, os.path.basename(manifest_store_path)
         )
@@ -288,18 +298,24 @@ class VectorStoreService:
     def _check_md5_hex(self, md5_for_check: str) -> bool:
         return md5_for_check in self._load_md5_store()
 
-    def _resolve_chunk_conf(self, source_type: str, source_path: str = "") -> dict[str, object]:
+    def _resolve_chunk_conf(
+        self, source_type: str, source_path: str = ""
+    ) -> dict[str, object]:
         default_conf = self.chunking_conf.get("default", {})
         source_conf_map = self.chunking_conf.get("source_type", {})
         file_conf_map = self.chunking_conf.get("file_type", {})
         ext = os.path.splitext(source_path)[1].lower().lstrip(".")
 
         conf = {
-            "chunk_size": int(default_conf.get("chunk_size", chroma_conf.get("chunk_size", 200))),
+            "chunk_size": int(
+                default_conf.get("chunk_size", chroma_conf.get("chunk_size", 200))
+            ),
             "chunk_overlap": int(
                 default_conf.get("chunk_overlap", chroma_conf.get("chunk_overlap", 20))
             ),
-            "separators": default_conf.get("separators", chroma_conf.get("separator", ["\n\n", "\n"])),
+            "separators": default_conf.get(
+                "separators", chroma_conf.get("separator", ["\n\n", "\n"])
+            ),
         }
         if source_type in source_conf_map:
             conf.update(source_conf_map[source_type] or {})
@@ -307,11 +323,17 @@ class VectorStoreService:
             conf.update(file_conf_map[ext] or {})
         conf["chunk_size"] = int(conf["chunk_size"])
         conf["chunk_overlap"] = int(conf["chunk_overlap"])
-        conf["separators"] = list(conf.get("separators", chroma_conf.get("separator", ["\n\n", "\n"])))
+        conf["separators"] = list(
+            conf.get("separators", chroma_conf.get("separator", ["\n\n", "\n"]))
+        )
         return conf
 
-    def _get_splitter(self, source_type: str, source_path: str = "") -> RecursiveCharacterTextSplitter:
-        conf = self._resolve_chunk_conf(source_type=source_type, source_path=source_path)
+    def _get_splitter(
+        self, source_type: str, source_path: str = ""
+    ) -> RecursiveCharacterTextSplitter:
+        conf = self._resolve_chunk_conf(
+            source_type=source_type, source_path=source_path
+        )
         cache_key = f"{source_type}|{os.path.splitext(source_path)[1].lower()}|{conf['chunk_size']}|{conf['chunk_overlap']}|{hash(tuple(conf['separators']))}"
         splitter = self._splitter_cache.get(cache_key)
         if splitter is not None:
@@ -381,7 +403,9 @@ class VectorStoreService:
             parser.feed(text)
             parsed_text = parser.get_text()
         else:
-            parsed_text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+            parsed_text = "\n".join(
+                line.strip() for line in text.splitlines() if line.strip()
+            )
 
         if len(parsed_text) > max_content_chars:
             return parsed_text[:max_content_chars]
@@ -418,7 +442,11 @@ class VectorStoreService:
             text = str(content or "").strip()
             if not text:
                 continue
-            metadata = metadatas[idx] if idx < len(metadatas) and isinstance(metadatas[idx], dict) else {}
+            metadata = (
+                metadatas[idx]
+                if idx < len(metadatas) and isinstance(metadatas[idx], dict)
+                else {}
+            )
             docs.append(Document(page_content=text, metadata=metadata))
         self._keyword_corpus_cache = (now, docs)
         return docs
@@ -441,7 +469,11 @@ class VectorStoreService:
             if overlap == 0:
                 continue
             unique_overlap = len(set(doc_tokens) & query_set)
-            phrase_bonus = 0.3 if query.strip() and query.strip().lower() in content.lower() else 0.0
+            phrase_bonus = (
+                0.3
+                if query.strip() and query.strip().lower() in content.lower()
+                else 0.0
+            )
             density = overlap / max(1, len(doc_tokens))
             score = unique_overlap + density + phrase_bonus
             scored.append((score, doc))
@@ -453,15 +485,25 @@ class VectorStoreService:
         retrieval_conf = chroma_conf.get("retrieval", {})
         hybrid_enabled = bool(retrieval_conf.get("hybrid_enabled", True))
         keyword_enabled = bool(retrieval_conf.get("keyword_enabled", True))
-        vector_k = int(retrieval_conf.get("vector_k", max(8, int(chroma_conf.get("k", 3)))))
-        keyword_k = int(retrieval_conf.get("keyword_k", max(8, int(chroma_conf.get("k", 3)))))
-        candidate_k = int(retrieval_conf.get("candidate_k", max(vector_k, keyword_k, int(chroma_conf.get("k", 3)))))
+        vector_k = int(
+            retrieval_conf.get("vector_k", max(8, int(chroma_conf.get("k", 3))))
+        )
+        keyword_k = int(
+            retrieval_conf.get("keyword_k", max(8, int(chroma_conf.get("k", 3))))
+        )
+        candidate_k = int(
+            retrieval_conf.get(
+                "candidate_k", max(vector_k, keyword_k, int(chroma_conf.get("k", 3)))
+            )
+        )
         rrf_k = int(retrieval_conf.get("rrf_k", 60))
         final_k = int(retrieval_conf.get("final_k", int(chroma_conf.get("k", 3))))
 
         start_time = time.perf_counter()
         vector_start = time.perf_counter()
-        vector_docs = self.vector_store.similarity_search(query, k=max(vector_k, final_k))
+        vector_docs = self.vector_store.similarity_search(
+            query, k=max(vector_k, final_k)
+        )
         vector_elapsed_ms = int((time.perf_counter() - vector_start) * 1000)
 
         if not hybrid_enabled:
@@ -481,7 +523,9 @@ class VectorStoreService:
         keyword_docs: list[Document] = []
         if keyword_enabled:
             keyword_start = time.perf_counter()
-            keyword_docs = self._keyword_retrieve(query=query, top_k=max(keyword_k, final_k))
+            keyword_docs = self._keyword_retrieve(
+                query=query, top_k=max(keyword_k, final_k)
+            )
             keyword_elapsed_ms = int((time.perf_counter() - keyword_start) * 1000)
 
         fused_scores: dict[str, float] = {}
@@ -522,7 +566,7 @@ class VectorStoreService:
 
     @staticmethod
     def _normalize_allowed_extensions(
-        allowed_types: list[str] | tuple[str, ...]
+        allowed_types: list[str] | tuple[str, ...],
     ) -> tuple[str, ...]:
         normalized = []
         for item in allowed_types:
@@ -559,7 +603,8 @@ class VectorStoreService:
         now = time.time()
         if (
             self.auto_sync_min_interval_seconds > 0
-            and now - self.__class__._last_auto_sync_ts < self.auto_sync_min_interval_seconds
+            and now - self.__class__._last_auto_sync_ts
+            < self.auto_sync_min_interval_seconds
         ):
             return {"status": "skipped", "trigger": trigger, "reason": "interval_limit"}
 
@@ -567,9 +612,14 @@ class VectorStoreService:
             now = time.time()
             if (
                 self.auto_sync_min_interval_seconds > 0
-                and now - self.__class__._last_auto_sync_ts < self.auto_sync_min_interval_seconds
+                and now - self.__class__._last_auto_sync_ts
+                < self.auto_sync_min_interval_seconds
             ):
-                return {"status": "skipped", "trigger": trigger, "reason": "interval_limit"}
+                return {
+                    "status": "skipped",
+                    "trigger": trigger,
+                    "reason": "interval_limit",
+                }
 
             result = self.load_documents()
             self.__class__._last_auto_sync_ts = time.time()
@@ -624,7 +674,9 @@ class VectorStoreService:
         logger.info(f"文本{filename}已成功上传到向量数据库 chunks={chunk_count}")
         return "【成功】内容已成功添加到知识库中"
 
-    def upsert_web_urls(self, urls: list[str], operator: str = "admin") -> dict[str, object]:
+    def upsert_web_urls(
+        self, urls: list[str], operator: str = "admin"
+    ) -> dict[str, object]:
         web_conf = chroma_conf.get("web_source", {})
         timeout_seconds = float(web_conf.get("timeout_seconds", 20))
         min_content_chars = int(web_conf.get("min_content_chars", 80))
@@ -654,7 +706,9 @@ class VectorStoreService:
             url = self._normalize_web_url(raw_url)
             if not url:
                 failed += 1
-                details.append({"url": raw_url, "status": "failed", "reason": "invalid_url"})
+                details.append(
+                    {"url": raw_url, "status": "failed", "reason": "invalid_url"}
+                )
                 logger.warning("网页入库失败: invalid_url raw=%s", raw_url)
                 continue
 
@@ -675,9 +729,15 @@ class VectorStoreService:
             if len(content) < min_content_chars:
                 failed += 1
                 details.append(
-                    {"url": url, "status": "failed", "reason": f"content_too_short:{len(content)}"}
+                    {
+                        "url": url,
+                        "status": "failed",
+                        "reason": f"content_too_short:{len(content)}",
+                    }
                 )
-                logger.warning("网页入库失败: url=%s content_too_short=%s", url, len(content))
+                logger.warning(
+                    "网页入库失败: url=%s content_too_short=%s", url, len(content)
+                )
                 continue
 
             md5_hex = hashlib.md5(content.encode("utf-8")).hexdigest()
@@ -703,7 +763,9 @@ class VectorStoreService:
                     operator=operator,
                 )
                 skipped += 1
-                details.append({"url": url, "status": "skipped", "reason": "duplicate_content"})
+                details.append(
+                    {"url": url, "status": "skipped", "reason": "duplicate_content"}
+                )
                 logger.debug("网页入库跳过: url=%s reason=duplicate_content", url)
                 continue
 
@@ -712,7 +774,9 @@ class VectorStoreService:
             chunks = [chunk for chunk in chunks if str(chunk).strip()]
             if not chunks:
                 failed += 1
-                details.append({"url": url, "status": "failed", "reason": "empty_chunks"})
+                details.append(
+                    {"url": url, "status": "failed", "reason": "empty_chunks"}
+                )
                 logger.warning("网页入库失败: url=%s reason=empty_chunks", url)
                 continue
 
@@ -813,7 +877,9 @@ class VectorStoreService:
                 splitter = self._get_splitter(source_type="file_scan", source_path=path)
                 split_documents: list[Document] = splitter.split_documents(documents)
                 if not split_documents:
-                    logger.warning(f"文件{path}没有被分割成任何文档，可能是切分配置不合理")
+                    logger.warning(
+                        f"文件{path}没有被分割成任何文档，可能是切分配置不合理"
+                    )
                     continue
 
                 indexed_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

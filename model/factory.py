@@ -53,7 +53,9 @@ def _resolve_openai_api_key() -> Optional[str]:
 
 
 def _resolve_openai_base_url() -> Optional[str]:
-    base_url = str(agent_conf.get("openai_base_url", agent_conf.get("OPENAI_BASE_URL", ""))).strip()
+    base_url = str(
+        agent_conf.get("openai_base_url", agent_conf.get("OPENAI_BASE_URL", ""))
+    ).strip()
     return base_url or None
 
 
@@ -72,7 +74,6 @@ class BaseModelFactory(ABC):
     @abstractmethod
     def generator(self) -> Optional[Embeddings | BaseChatModel]:
         pass
-
 
 
 class ChatModelFactory(BaseModelFactory):

@@ -33,7 +33,7 @@ DEFAULT_LOADER_PRIORITY: dict[str, list[str]] = {
 }
 
 
-def get_file_md5_hex(filepath:str):
+def get_file_md5_hex(filepath: str):
     if not os.path.exists(filepath):
         logger.error(f"文件{filepath}不存在")
         return
@@ -55,7 +55,9 @@ def get_file_md5_hex(filepath:str):
         return None
 
 
-def listdir_with_allowed_type(path:str, allowed_types:tuple[str, ...]) -> tuple[str, ...]:
+def listdir_with_allowed_type(
+    path: str, allowed_types: tuple[str, ...]
+) -> tuple[str, ...]:
     files = []
     if not os.path.isdir(path):
         logger.error(f"[listdir_with_allowed_type]{path}不是一个目录")
@@ -67,7 +69,7 @@ def listdir_with_allowed_type(path:str, allowed_types:tuple[str, ...]) -> tuple[
     return tuple(files)
 
 
-def _clean_documents(docs:list[Document]) -> list[Document]:
+def _clean_documents(docs: list[Document]) -> list[Document]:
     cleaned = []
     for doc in docs or []:
         if not doc or not str(getattr(doc, "page_content", "")).strip():
@@ -76,11 +78,11 @@ def _clean_documents(docs:list[Document]) -> list[Document]:
     return cleaned
 
 
-def _load_with_text(filepath:str, _:dict[str, Any]) -> list[Document]:
+def _load_with_text(filepath: str, _: dict[str, Any]) -> list[Document]:
     return TextLoader(filepath, encoding="utf-8").load()
 
 
-def _load_with_pypdf(filepath:str, loader_conf:dict[str, Any]) -> list[Document]:
+def _load_with_pypdf(filepath: str, loader_conf: dict[str, Any]) -> list[Document]:
     pdf_conf = loader_conf.get("pdf", {})
     extraction_mode = str(pdf_conf.get("pypdf_extraction_mode", "layout"))
     mode = str(pdf_conf.get("pypdf_mode", "page"))
@@ -91,7 +93,9 @@ def _load_with_pypdf(filepath:str, loader_conf:dict[str, Any]) -> list[Document]
     ).load()
 
 
-def _load_with_unstructured_pdf(filepath:str, loader_conf:dict[str, Any]) -> list[Document]:
+def _load_with_unstructured_pdf(
+    filepath: str, loader_conf: dict[str, Any]
+) -> list[Document]:
     if importlib.util.find_spec("unstructured") is None:
         raise RuntimeError("未安装unstructured依赖")
 
@@ -123,21 +127,23 @@ def _load_with_unstructured_pdf(filepath:str, loader_conf:dict[str, Any]) -> lis
         raise
 
 
-def _collect_marker_markdown_files(output_dir:Path) -> list[Path]:
+def _collect_marker_markdown_files(output_dir: Path) -> list[Path]:
     candidates = []
     for ext in ("*.md", "*.markdown"):
         candidates.extend(output_dir.rglob(ext))
     return sorted(candidates)
 
 
-def _load_with_marker(filepath:str, loader_conf:dict[str, Any]) -> list[Document]:
+def _load_with_marker(filepath: str, loader_conf: dict[str, Any]) -> list[Document]:
     pdf_conf = loader_conf.get("pdf", {})
     marker_enabled = bool(pdf_conf.get("marker_enabled", True))
     if not marker_enabled:
         raise RuntimeError("Marker loader is disabled by config")
 
     marker_timeout_seconds = int(pdf_conf.get("marker_timeout_seconds", 300))
-    command = str(pdf_conf.get("marker_command", "marker_single")).strip() or "marker_single"
+    command = (
+        str(pdf_conf.get("marker_command", "marker_single")).strip() or "marker_single"
+    )
     if shutil.which(command) is None:
         raise RuntimeError(f"未找到Marker命令: {command}")
 
@@ -177,31 +183,33 @@ def _load_with_marker(filepath:str, loader_conf:dict[str, Any]) -> list[Document
                 f" stdout={stdout_text[:120]} stderr={stderr_text[:120]}"
             )
 
-        docs:list[Document] = []
+        docs: list[Document] = []
         for md_file in markdown_files:
             docs.extend(TextLoader(str(md_file), encoding="utf-8").load())
         return docs
 
 
-def _load_with_unstructured_markdown(filepath:str, _:dict[str, Any]) -> list[Document]:
+def _load_with_unstructured_markdown(
+    filepath: str, _: dict[str, Any]
+) -> list[Document]:
     if importlib.util.find_spec("unstructured") is None:
         raise RuntimeError("未安装unstructured依赖")
     return UnstructuredMarkdownLoader(filepath, mode="elements").load()
 
 
-def _load_with_unstructured_docx(filepath:str, _:dict[str, Any]) -> list[Document]:
+def _load_with_unstructured_docx(filepath: str, _: dict[str, Any]) -> list[Document]:
     if importlib.util.find_spec("unstructured") is None:
         raise RuntimeError("未安装unstructured依赖")
     return UnstructuredWordDocumentLoader(filepath, mode="elements").load()
 
 
-def _load_with_unstructured_html(filepath:str, _:dict[str, Any]) -> list[Document]:
+def _load_with_unstructured_html(filepath: str, _: dict[str, Any]) -> list[Document]:
     if importlib.util.find_spec("unstructured") is None:
         raise RuntimeError("未安装unstructured依赖")
     return UnstructuredHTMLLoader(filepath, mode="elements").load()
 
 
-def _load_with_csv(filepath:str, _:dict[str, Any]) -> list[Document]:
+def _load_with_csv(filepath: str, _: dict[str, Any]) -> list[Document]:
     return CSVLoader(filepath, autodetect_encoding=True).load()
 
 
@@ -217,25 +225,29 @@ LOADER_FUNC_MAP: dict[str, LoaderFunc] = {
 }
 
 
-def _resolve_loader_priority(ext_without_dot:str, loader_conf:dict[str, Any]) -> list[str]:
+def _resolve_loader_priority(
+    ext_without_dot: str, loader_conf: dict[str, Any]
+) -> list[str]:
     configured = loader_conf.get("loader_priority", {})
     if isinstance(configured, dict):
         configured_priority = configured.get(ext_without_dot, None)
         if isinstance(configured_priority, list) and configured_priority:
-            return [str(item).strip() for item in configured_priority if str(item).strip()]
+            return [
+                str(item).strip() for item in configured_priority if str(item).strip()
+            ]
 
     return DEFAULT_LOADER_PRIORITY.get(ext_without_dot, ["text"])
 
 
 def load_documents_by_path(
-    filepath:str,
-    loader_conf:dict[str, Any] | None = None,
+    filepath: str,
+    loader_conf: dict[str, Any] | None = None,
 ) -> tuple[list[Document], str]:
     config = loader_conf or {}
     ext_without_dot = Path(filepath).suffix.lower().lstrip(".")
     loader_priority = _resolve_loader_priority(ext_without_dot, config)
 
-    errors:list[str] = []
+    errors: list[str] = []
     for loader_name in loader_priority:
         loader = LOADER_FUNC_MAP.get(loader_name)
         if loader is None:
@@ -256,4 +268,3 @@ def load_documents_by_path(
         " | ".join(errors),
     )
     return [], ""
-

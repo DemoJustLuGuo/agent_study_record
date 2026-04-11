@@ -1,4 +1,5 @@
 import streamlit as st
+
 try:
     from rag.knowledge_base import KnowledgeBaseService
 except ModuleNotFoundError:
@@ -7,7 +8,9 @@ import time
 
 st.title("知识库更新服务")
 
-uploader_file = st.file_uploader("请上传txt文件",type=["txt"],accept_multiple_files=False)
+uploader_file = st.file_uploader(
+    "请上传txt文件", type=["txt"], accept_multiple_files=False
+)
 
 if "service" not in st.session_state:
     st.session_state["service"] = KnowledgeBaseService()
@@ -24,5 +27,5 @@ if uploader_file is not None:
 
     with st.spinner("正在上传文件到知识库..."):
         time.sleep(1)  # 模拟上传过程中的等待时间
-        result = st.session_state["service"].upload_by_str(text,file_name)
+        result = st.session_state["service"].upload_by_str(text, file_name)
         st.write(result)

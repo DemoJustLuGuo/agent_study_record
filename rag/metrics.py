@@ -3,7 +3,6 @@ from collections import deque
 from datetime import datetime
 from typing import Any
 
-
 _lock = threading.Lock()
 _window = deque(maxlen=200)
 _summary = {
@@ -54,12 +53,14 @@ def get_rag_metrics_markdown() -> str:
         return "### 📈 在线 RAG 指标\n> 暂无运行数据。"
 
     count = len(events)
+    # fmt: off
     avg_total_ms = sum(_safe_int(item.get("total_ms", 0)) for item in events) / max(1, count)
     avg_retrieval_ms = sum(_safe_int(item.get("retrieval_ms", 0)) for item in events) / max(1, count)
     avg_rerank_ms = sum(_safe_int(item.get("rerank_ms", 0)) for item in events) / max(1, count)
     avg_llm_ms = sum(_safe_int(item.get("llm_ms", 0)) for item in events) / max(1, count)
     avg_candidates = sum(_safe_int(item.get("candidate_count", 0)) for item in events) / max(1, count)
     avg_references = sum(_safe_int(item.get("reference_count", 0)) for item in events) / max(1, count)
+    # fmt: on
 
     by_strategy: dict[str, int] = {}
     for item in events:
@@ -73,7 +74,10 @@ def get_rag_metrics_markdown() -> str:
             f" | refs={item.get('reference_count',0)} | total={item.get('total_ms',0)}ms"
         )
 
-    strategy_lines = [f"- `{k}`: {v}" for k, v in sorted(by_strategy.items(), key=lambda kv: kv[1], reverse=True)]
+    strategy_lines = [
+        f"- `{k}`: {v}"
+        for k, v in sorted(by_strategy.items(), key=lambda kv: kv[1], reverse=True)
+    ]
 
     return "\n".join(
         [

@@ -177,9 +177,10 @@ def _references_to_markdown(references: list[dict[str, Any]]) -> str:
         content = normalize_markdown_layout(item.get("content", "").strip())
         if len(content) > 420:
             content = content[:420] + "...（已截断）"
-        quoted_content = "\n".join(
-            f"> {line}" for line in content.splitlines() if line.strip()
-        ) or "> （空片段）"
+        quoted_content = (
+            "\n".join(f"> {line}" for line in content.splitlines() if line.strip())
+            or "> （空片段）"
+        )
         metadata = item.get("metadata", {})
         source = metadata.get("source", "未知来源")
         source_type = metadata.get("source_type", "unknown")

@@ -18,7 +18,9 @@ def _load_app_css() -> str:
 
 
 def build_app() -> gr.Blocks:
-    default_base_url, default_api_key, connection_status_text = load_connection_defaults()
+    default_base_url, default_api_key, connection_status_text = (
+        load_connection_defaults()
+    )
 
     with gr.Blocks(
         title="通信智能体工作台", css=_load_app_css(), theme=gr.themes.Base()
@@ -26,7 +28,7 @@ def build_app() -> gr.Blocks:
         gr.HTML(
             '<div class="header-bar">'
             '<div class="header-title-wrap">'
-            '<h1>📡 通信智能体工作台 </h1>'
+            "<h1>📡 通信智能体工作台 </h1>"
             '<div class="header-subtitle">LangChain ReAct Agent · RAG 检索增强 · ChromaDB 知识底座</div>'
             "</div>"
             '<span class="status-badge online">在线运行</span>'

@@ -10,7 +10,7 @@ TOOL_TIMEOUT_SECONDS = 30
 TOOL_OUTPUT_MAX_CHARS = 10000
 
 
-def truncate_output(text:str) -> str:
+def truncate_output(text: str) -> str:
     if len(text) <= TOOL_OUTPUT_MAX_CHARS:
         return text
     return text[:TOOL_OUTPUT_MAX_CHARS] + "\n...[输出过长，已截断]"
@@ -26,7 +26,7 @@ def format_tool_failure(tool_name: str, reason: str, solution: str) -> str:
     )
 
 
-def run_subprocess(command:list[str], tool_name:str) -> str:
+def run_subprocess(command: list[str], tool_name: str) -> str:
     try:
         completed = subprocess.run(
             command,
@@ -51,7 +51,7 @@ def run_subprocess(command:list[str], tool_name:str) -> str:
             solution="请检查运行环境、命令参数与依赖安装状态后重试。",
         )
 
-    parts:list[str] = [
+    parts: list[str] = [
         f"tool={tool_name}",
         f"exit_code={completed.returncode}",
     ]
@@ -69,7 +69,7 @@ def run_subprocess(command:list[str], tool_name:str) -> str:
     return truncate_output("\n".join(parts))
 
 
-def load_text_from_url(url:str, timeout:int) -> Optional[str]:
+def load_text_from_url(url: str, timeout: int) -> Optional[str]:
     try:
         request = Request(
             url,
@@ -81,7 +81,9 @@ def load_text_from_url(url:str, timeout:int) -> Optional[str]:
             content_type = (response.headers.get("Content-Type") or "").lower()
             encoding = "utf-8"
             if "charset=" in content_type:
-                encoding = content_type.split("charset=")[-1].split(";")[0].strip() or "utf-8"
+                encoding = (
+                    content_type.split("charset=")[-1].split(";")[0].strip() or "utf-8"
+                )
 
             return response.read().decode(encoding, errors="replace")
     except URLError as exc:

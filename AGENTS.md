@@ -127,6 +127,11 @@ docs: 更新 AGENTS.md 开发规则
 chore(config): 升级 langchain 到 1.3.0
 ```
 
+### R7 — Python 代码格式化（Black）
+
+- 仓库内所有 Python 文件统一使用 **black** 格式化。
+- 每次新增或修改 Python 代码后，必须对本次变更涉及的 Python 文件执行一次 black。
+
 ## Workflow — 添加"通信协议解析工具"步骤
 
 以下为新增一个通信协议解析 Tool（如 HDLC / PPP / 自定义帧格式）的标准流程：

@@ -1,7 +1,6 @@
 from utils.config_handler import agent_conf, chroma_conf
 from utils.path_tools import get_abs_path
 
-
 md5_path = get_abs_path(chroma_conf["md5_hex_store"])
 collection_name = chroma_conf["collection_name"]
 embedding_function = agent_conf["embedding_model_name"]

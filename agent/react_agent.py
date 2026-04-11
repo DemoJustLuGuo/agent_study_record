@@ -205,7 +205,9 @@ class ReactAgent:
         return cleaned
 
     @staticmethod
-    def _extract_failure_reason_and_solution(tool_output: str) -> tuple[str, str] | None:
+    def _extract_failure_reason_and_solution(
+        tool_output: str,
+    ) -> tuple[str, str] | None:
         text = (tool_output or "").strip()
         if not text.startswith("【失败】"):
             return None
@@ -261,7 +263,9 @@ class ReactAgent:
     def execute_stream(self, query: str):
         trace_id = uuid.uuid4().hex[:8]
         logger.info(f"[react_agent][{trace_id}] received query")
-        logger.debug("[react_agent][%s] query_preview=%s", trace_id, (query or "")[:300])
+        logger.debug(
+            "[react_agent][%s] query_preview=%s", trace_id, (query or "")[:300]
+        )
         messages = [{"role": "user", "content": query}]
         emitted_status: set[str] = set()
         clear_tool_events(trace_id)
@@ -292,7 +296,9 @@ class ReactAgent:
         strategy = self._route_strategy(query)
         strategy_msg = self._strategy_message(strategy)
         # 仅记录日志，不向前端输出，避免干扰用户和模型
-        logger.info(f"[react_agent][{trace_id}] strategy={strategy} decision={strategy_msg}")
+        logger.info(
+            f"[react_agent][{trace_id}] strategy={strategy} decision={strategy_msg}"
+        )
 
         # 2) 复杂请求 -> 任务拆解
         if self._needs_planning(query):
@@ -301,7 +307,9 @@ class ReactAgent:
                 f"任务规划：\n{plan_text}\n请按以上步骤逐步完成，并在结束时总结结果。"
             )
             # 仅记录日志，不输出到前端
-            logger.info(f"[react_agent][{trace_id}] planning enabled plan_len={len(plan_text)}")
+            logger.info(
+                f"[react_agent][{trace_id}] planning enabled plan_len={len(plan_text)}"
+            )
 
         # 3) ReAct 流程 — 使用 stream_mode="messages" 实现逐 token 流式
         input_dict = {"messages": messages}
@@ -325,7 +333,9 @@ class ReactAgent:
                 if chunk_class == "ToolMessage":
                     tool_name = getattr(message_chunk, "name", "") or ""
                     tool_result = str(getattr(message_chunk, "content", "") or "")
-                    failure_info = self._extract_failure_reason_and_solution(tool_result)
+                    failure_info = self._extract_failure_reason_and_solution(
+                        tool_result
+                    )
                     if failure_info:
                         reason, solution = failure_info
                         think_msg = (

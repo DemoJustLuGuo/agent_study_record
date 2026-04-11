@@ -52,14 +52,15 @@ def _get_matlab_engine() -> Any:
     return _matlab_engine_session
 
 
-def _normalize_result(prefix:str, result:Any) -> str:
+def _normalize_result(prefix: str, result: Any) -> str:
     text = "" if result is None else str(result).strip()
     if not text:
         return f"【成功】{prefix}执行完成（无输出）"
     return truncate_output(text)
 
+
 @tool(description="执行Python代码并返回执行结果，适用于通信算法快速计算、验证与仿真")
-def python(code:str) -> str:
+def python(code: str) -> str:
     code = (code or "").strip()
     if not code:
         return format_tool_failure(
@@ -85,7 +86,7 @@ def python(code:str) -> str:
 
 
 @tool(description="执行MATLAB代码并返回执行结果，基于matlabengine模块")
-def matlab(code:str) -> str:
+def matlab(code: str) -> str:
     code = (code or "").strip()
     if not code:
         return format_tool_failure(

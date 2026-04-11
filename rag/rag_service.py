@@ -42,7 +42,11 @@ class RAGSummarizeService:
         retrieval_conf: dict[str, Any],
     ) -> tuple[list[Document], list[dict[str, Any]]]:
         rerank_conf = retrieval_conf.get("rerank", {})
-        final_k = int(rerank_conf.get("final_k", retrieval_conf.get("final_k", chroma_conf.get("k", 3))))
+        final_k = int(
+            rerank_conf.get(
+                "final_k", retrieval_conf.get("final_k", chroma_conf.get("k", 3))
+            )
+        )
         weights = rerank_conf.get("weights", {})
         source_weight_conf = rerank_conf.get("source_type_weights", {})
         query_text = (query or "").strip().lower()
@@ -61,10 +65,17 @@ class RAGSummarizeService:
             doc_tokens = self._tokenize(content)
             doc_token_set = set(doc_tokens)
 
-            coverage = len(query_token_set & doc_token_set) / max(1, len(query_token_set))
+            coverage = len(query_token_set & doc_token_set) / max(
+                1, len(query_token_set)
+            )
             phrase = 1.0 if query_text and query_text in content_lower else 0.0
             first_hit = min(
-                [content_lower.find(token) for token in query_token_set if token and content_lower.find(token) >= 0] or [-1]
+                [
+                    content_lower.find(token)
+                    for token in query_token_set
+                    if token and content_lower.find(token) >= 0
+                ]
+                or [-1]
             )
             position = 0.0 if first_hit < 0 else 1.0 / (1.0 + first_hit / 120.0)
             target_len = int(rerank_conf.get("target_chunk_length", 360))
@@ -104,8 +115,7 @@ class RAGSummarizeService:
         context_blocks = []
         for index, doc in enumerate(context_docs, start=1):
             context_blocks.append(
-                f"【参考资料{index}】{doc.page_content}\n"
-                f"【元数据】{doc.metadata}"
+                f"【参考资料{index}】{doc.page_content}\n" f"【元数据】{doc.metadata}"
             )
         return "\n\n".join(context_blocks)
 
@@ -165,7 +175,9 @@ class RAGSummarizeService:
                 "rerank_ms": rerank_elapsed_ms,
                 "llm_ms": llm_elapsed_ms,
                 "total_ms": total_elapsed_ms,
-                "candidate_count": int(retrieval_debug.get("candidate_count", len(candidates))),
+                "candidate_count": int(
+                    retrieval_debug.get("candidate_count", len(candidates))
+                ),
                 "reference_count": len(references),
                 "strategy": retrieval_debug.get("strategy", "unknown"),
             },

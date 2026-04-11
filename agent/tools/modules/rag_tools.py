@@ -24,7 +24,7 @@ def _get_rag_service() -> "RAGSummarizeService":
 
 
 @tool(description="从向量存储中检索参考资料")
-def rag_summarize(query:str) -> str:
+def rag_summarize(query: str) -> str:
     try:
         return _get_rag_service().rag_summarize(query)
     except Exception as exc:

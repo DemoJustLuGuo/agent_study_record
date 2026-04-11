@@ -65,7 +65,9 @@ def _preview_message(msg: Any, limit: int = TRUNCATE_PREVIEW) -> str:
         return "<unprintable>"
 
 
-def _message_snapshot(messages: list[Any], limit: int = TRACE_MESSAGE_LIMIT) -> list[dict[str, Any]]:
+def _message_snapshot(
+    messages: list[Any], limit: int = TRACE_MESSAGE_LIMIT
+) -> list[dict[str, Any]]:
     snapshot = []
     for msg in messages[-limit:]:
         snapshot.append(
@@ -73,7 +75,9 @@ def _message_snapshot(messages: list[Any], limit: int = TRACE_MESSAGE_LIMIT) -> 
                 "type": type(msg).__name__,
                 "role": getattr(msg, "type", getattr(msg, "role", "")),
                 "preview": _preview_message(msg),
-                "len": len(getattr(msg, "content", "") or str(getattr(msg, "content", ""))),
+                "len": len(
+                    getattr(msg, "content", "") or str(getattr(msg, "content", ""))
+                ),
             }
         )
     return snapshot
@@ -152,10 +156,14 @@ def monitor_tool(
     """
     start = time.perf_counter()
     tool_name = request.tool_call["name"]
-    args_preview = _preview_text(str(request.tool_call.get("args")), limit=TRUNCATE_PREVIEW)
+    args_preview = _preview_text(
+        str(request.tool_call.get("args")), limit=TRUNCATE_PREVIEW
+    )
     trace_prefix = _log_prefix(request.runtime)
 
-    logger.info(f"{trace_prefix}[tool] start name={tool_name} args_preview={args_preview}")
+    logger.info(
+        f"{trace_prefix}[tool] start name={tool_name} args_preview={args_preview}"
+    )
     _push_tool_event(request.runtime, "start", tool_name)
     _write_trace(
         request.runtime,
@@ -188,12 +196,16 @@ def monitor_tool(
 
         if tool_name == "fill_context_for_report":
             request.runtime.context["report"] = True
-            logger.info(f"{trace_prefix}[tool] set report=True by fill_context_for_report")
+            logger.info(
+                f"{trace_prefix}[tool] set report=True by fill_context_for_report"
+            )
 
         return result
     except Exception as exc:  # pragma: no cover
         elapsed = (time.perf_counter() - start) * 1000
-        logger.exception(f"{trace_prefix}[tool] fail name={tool_name} elapsed_ms={elapsed:.1f} error={exc}")
+        logger.exception(
+            f"{trace_prefix}[tool] fail name={tool_name} elapsed_ms={elapsed:.1f} error={exc}"
+        )
         _write_trace(
             request.runtime,
             "tool_error",
@@ -236,11 +248,17 @@ def log_before_model(state: AgentState, runtime: Runtime):
 
 
 @wrap_model_call
-def log_model_call(request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]):
+def log_model_call(
+    request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
+):
     """Wrap the LLM call to time it and capture the full prompt/response outline."""
     start = time.perf_counter()
     trace_prefix = _log_prefix(request.runtime)
-    model_name = getattr(request.model, "model_name", None) or getattr(request.model, "model", None) or type(request.model).__name__
+    model_name = (
+        getattr(request.model, "model_name", None)
+        or getattr(request.model, "model", None)
+        or type(request.model).__name__
+    )
     model_temperature = getattr(request.model, "temperature", None)
     model_base_url = (
         getattr(request.model, "openai_api_base", None)
@@ -249,7 +267,9 @@ def log_model_call(request: ModelRequest, handler: Callable[[ModelRequest], Mode
     )
     tool_names = []
     for tool_obj in request.tools or []:
-        tool_name = getattr(tool_obj, "name", None) or getattr(tool_obj, "__name__", None)
+        tool_name = getattr(tool_obj, "name", None) or getattr(
+            tool_obj, "__name__", None
+        )
         if tool_name:
             tool_names.append(str(tool_name))
 
@@ -295,7 +315,9 @@ def log_model_call(request: ModelRequest, handler: Callable[[ModelRequest], Mode
         return response
     except Exception as exc:  # pragma: no cover
         elapsed = (time.perf_counter() - start) * 1000
-        logger.exception(f"{trace_prefix}[model] fail name={model_name} elapsed_ms={elapsed:.1f} error={exc}")
+        logger.exception(
+            f"{trace_prefix}[model] fail name={model_name} elapsed_ms={elapsed:.1f} error={exc}"
+        )
         _write_trace(
             request.runtime,
             "model_error",

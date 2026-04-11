@@ -6,7 +6,7 @@ from agent.tools.modules.memory_tools import search_memory, store_memory
 from agent.tools.modules.rag_tools import rag_summarize
 from agent.tools.modules.web_tools import web_search
 
-_REGISTERED_TOOLS:dict[str, BaseTool] = {
+_REGISTERED_TOOLS: dict[str, BaseTool] = {
     "rag_summarize": rag_summarize,
     "web_search": web_search,
     "fill_context_for_report": fill_context_for_report,

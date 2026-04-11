@@ -14,12 +14,12 @@ _memory_lock = Lock()
 
 def _get_memory_service() -> "LongTermMemoryService":
     global _memory
-    if _memory is None:
-        with _memory_lock:
-            if _memory is None:
-                from rag.memory_service import LongTermMemoryService
+    with _memory_lock:
+        if _memory is None:
+            from rag.memory_service import LongTermMemoryService
 
-                _memory = LongTermMemoryService()
+            _memory = LongTermMemoryService()
+
     return _memory
 
 

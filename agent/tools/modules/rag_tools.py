@@ -14,12 +14,12 @@ _rag_lock = Lock()
 
 def _get_rag_service() -> "RAGSummarizeService":
     global _rag
-    if _rag is None:
-        with _rag_lock:
-            if _rag is None:
-                from rag.rag_service import RAGSummarizeService
+    with _rag_lock:
+        if _rag is None:
+            from rag.rag_service import RAGSummarizeService
 
-                _rag = RAGSummarizeService()
+            _rag = RAGSummarizeService()
+
     return _rag
 
 

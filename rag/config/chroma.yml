@@ -59,6 +59,29 @@ web_source:
   min_content_chars: 80
   max_content_chars: 50000
   user_agent: "Mozilla/5.0 (compatible; AgentStudyRAG/1.0; +https://example.local)"
+  cleaning:
+    enabled: true
+    mode: conservative
+    drop_short_line_length: 0
+    noise_keywords:
+      - "ad"
+      - "ads"
+      - "advert"
+      - "banner"
+      - "popup"
+      - "modal"
+      - "cookie"
+      - "consent"
+      - "sidebar"
+      - "footer"
+      - "toolbar"
+      - "recommend"
+      - "related"
+      - "comment"
+      - "social"
+      - "share"
+      - "sponsor"
+      - "widget"
 
 chunk_size: 200
 chunk_overlap: 20

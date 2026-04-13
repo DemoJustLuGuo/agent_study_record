@@ -44,28 +44,141 @@ class _HTMLTextExtractor(HTMLParser):
         "pre",
     }
     _SKIP_TAGS = {"script", "style", "noscript", "svg"}
+    _CONSERVATIVE_NOISE_TAGS = {
+        "aside",
+        "footer",
+        "nav",
+        "form",
+        "button",
+        "iframe",
+        "canvas",
+        "dialog",
+    }
+    _CONSERVATIVE_NOISE_ROLES = {
+        "navigation",
+        "contentinfo",
+        "complementary",
+        "banner",
+        "dialog",
+    }
+    _DEFAULT_NOISE_KEYWORDS = [
+        "ad",
+        "ads",
+        "advert",
+        "banner",
+        "popup",
+        "modal",
+        "cookie",
+        "consent",
+        "sidebar",
+        "footer",
+        "toolbar",
+        "recommend",
+        "related",
+        "comment",
+        "social",
+        "share",
+        "sponsor",
+        "widget",
+    ]
 
-    def __init__(self):
+    def __init__(self, cleaning_conf: dict[str, object] | None = None):
         super().__init__()
         self._parts: list[str] = []
-        self._skip_depth = 0
+        self._skip_tag_stack: list[str] = []
+        self._noise_block_hits = 0
+        self._dropped_short_lines = 0
+        conf = cleaning_conf or {}
+        self._cleaning_enabled = bool(conf.get("enabled", True))
+        self._cleaning_mode = str(conf.get("mode", "conservative")).strip().lower()
+        self._drop_short_line_length = int(conf.get("drop_short_line_length", 0))
+        configured_keywords = conf.get("noise_keywords", [])
+        if isinstance(configured_keywords, list) and configured_keywords:
+            self._noise_keywords = [
+                str(item).strip().lower()
+                for item in configured_keywords
+                if str(item).strip()
+            ]
+        else:
+            self._noise_keywords = list(self._DEFAULT_NOISE_KEYWORDS)
+
+    def _normalize_attrs(self, attrs: list[tuple[str, str | None]]) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        for key, value in attrs:
+            normalized[str(key or "").strip().lower()] = (
+                str(value or "").strip().lower()
+            )
+        return normalized
+
+    def _contains_noise_keyword(self, text: str) -> bool:
+        if not text:
+            return False
+        tokens = [
+            token for token in re.split(r"[^a-z0-9]+", text.lower()) if token.strip()
+        ]
+        if not tokens:
+            return False
+        token_set = set(tokens)
+        for keyword in self._noise_keywords:
+            if len(keyword) <= 2:
+                if keyword in token_set:
+                    return True
+                continue
+            if keyword in token_set or any(
+                token.startswith(keyword) for token in tokens
+            ):
+                return True
+        return False
+
+    def _is_noise_container(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> bool:
+        if tag in self._SKIP_TAGS:
+            return True
+        if not self._cleaning_enabled:
+            return False
+        if (
+            self._cleaning_mode == "conservative"
+            and tag in self._CONSERVATIVE_NOISE_TAGS
+        ):
+            return True
+
+        attr_map = self._normalize_attrs(attrs)
+        class_or_id = " ".join(
+            [
+                attr_map.get("class", ""),
+                attr_map.get("id", ""),
+                attr_map.get("role", ""),
+                attr_map.get("aria-label", ""),
+                attr_map.get("data-testid", ""),
+            ]
+        )
+        role_value = attr_map.get("role", "")
+        if (
+            self._cleaning_mode == "conservative"
+            and role_value in self._CONSERVATIVE_NOISE_ROLES
+        ):
+            return True
+        return self._contains_noise_keyword(class_or_id)
 
     def handle_starttag(self, tag, attrs):
-        if tag in self._SKIP_TAGS:
-            self._skip_depth += 1
+        if self._is_noise_container(tag, attrs):
+            self._skip_tag_stack.append(tag)
+            if tag not in self._SKIP_TAGS:
+                self._noise_block_hits += 1
             return
         if tag in self._BLOCK_TAGS:
             self._parts.append("\n")
 
     def handle_endtag(self, tag):
-        if tag in self._SKIP_TAGS and self._skip_depth > 0:
-            self._skip_depth -= 1
+        if self._skip_tag_stack and tag == self._skip_tag_stack[-1]:
+            self._skip_tag_stack.pop()
             return
         if tag in self._BLOCK_TAGS:
             self._parts.append("\n")
 
     def handle_data(self, data):
-        if self._skip_depth > 0:
+        if self._skip_tag_stack:
             return
         text = (data or "").strip()
         if text:
@@ -74,7 +187,26 @@ class _HTMLTextExtractor(HTMLParser):
     def get_text(self) -> str:
         raw = " ".join(self._parts)
         lines = [" ".join(line.split()) for line in raw.splitlines()]
-        return "\n".join(line for line in lines if line).strip()
+        filtered_lines: list[str] = []
+        for line in lines:
+            if not line:
+                continue
+            if (
+                self._drop_short_line_length > 0
+                and len(line) < self._drop_short_line_length
+            ):
+                self._dropped_short_lines += 1
+                continue
+            filtered_lines.append(line)
+        return "\n".join(filtered_lines).strip()
+
+    def get_cleaning_stats(self, raw_chars: int) -> dict[str, object]:
+        return {
+            "cleaning_mode": self._cleaning_mode,
+            "noise_block_hits": self._noise_block_hits,
+            "dropped_short_lines": self._dropped_short_lines,
+            "raw_chars": int(raw_chars),
+        }
 
 
 class VectorStoreService:
@@ -387,7 +519,8 @@ class VectorStoreService:
         timeout_seconds: float,
         user_agent: str,
         max_content_chars: int,
-    ) -> str:
+        cleaning_conf: dict[str, object] | None = None,
+    ) -> tuple[str, dict[str, object]]:
         request = Request(url, headers={"User-Agent": user_agent})
         try:
             with urlopen(request, timeout=timeout_seconds) as response:
@@ -399,17 +532,25 @@ class VectorStoreService:
             raise RuntimeError(f"网络请求失败: {error}") from error
 
         if "html" in content_type or "<html" in text.lower():
-            parser = _HTMLTextExtractor()
+            parser = _HTMLTextExtractor(cleaning_conf=cleaning_conf)
             parser.feed(text)
             parsed_text = parser.get_text()
+            stats = parser.get_cleaning_stats(raw_chars=len(text))
         else:
             parsed_text = "\n".join(
                 line.strip() for line in text.splitlines() if line.strip()
             )
+            stats = {
+                "cleaning_mode": "plain_text",
+                "noise_block_hits": 0,
+                "dropped_short_lines": 0,
+                "raw_chars": len(text),
+            }
 
         if len(parsed_text) > max_content_chars:
-            return parsed_text[:max_content_chars]
-        return parsed_text
+            parsed_text = parsed_text[:max_content_chars]
+        stats["cleaned_chars"] = len(parsed_text)
+        return parsed_text, stats
 
     @staticmethod
     def _tokenize_for_keyword(text: str) -> list[str]:
@@ -678,6 +819,7 @@ class VectorStoreService:
         self, urls: list[str], operator: str = "admin"
     ) -> dict[str, object]:
         web_conf = chroma_conf.get("web_source", {})
+        cleaning_conf = web_conf.get("cleaning", {})
         timeout_seconds = float(web_conf.get("timeout_seconds", 20))
         min_content_chars = int(web_conf.get("min_content_chars", 80))
         max_content_chars = int(web_conf.get("max_content_chars", 50000))
@@ -693,7 +835,7 @@ class VectorStoreService:
         updated = 0
         skipped = 0
         failed = 0
-        details: list[dict[str, str]] = []
+        details: list[dict[str, object]] = []
         logger.info(
             "网页入库开始: total=%s operator=%s timeout=%s min_chars=%s",
             len(urls),
@@ -719,6 +861,9 @@ class VectorStoreService:
                     timeout_seconds=timeout_seconds,
                     user_agent=user_agent,
                     max_content_chars=max_content_chars,
+                    cleaning_conf=(
+                        cleaning_conf if isinstance(cleaning_conf, dict) else {}
+                    ),
                 )
             except Exception as error:
                 failed += 1
@@ -726,21 +871,63 @@ class VectorStoreService:
                 logger.warning("网页入库失败: url=%s reason=%s", url, error)
                 continue
 
-            if len(content) < min_content_chars:
+            text_content, cleaning_stats = content
+            logger.info(
+                "网页清洗统计: url=%s mode=%s raw_chars=%s cleaned_chars=%s noise_hits=%s dropped_short_lines=%s",
+                url,
+                cleaning_stats.get("cleaning_mode", "unknown"),
+                cleaning_stats.get("raw_chars", 0),
+                cleaning_stats.get("cleaned_chars", 0),
+                cleaning_stats.get("noise_block_hits", 0),
+                cleaning_stats.get("dropped_short_lines", 0),
+            )
+
+            if len(text_content) < min_content_chars:
+                cleaned_chars = len(text_content)
+                if isinstance(cleaning_conf, dict) and bool(
+                    cleaning_conf.get("enabled", True)
+                ):
+                    fallback_conf = dict(cleaning_conf)
+                    fallback_conf["enabled"] = False
+                    try:
+                        fallback_text, fallback_stats = self._fetch_web_text(
+                            url=url,
+                            timeout_seconds=timeout_seconds,
+                            user_agent=user_agent,
+                            max_content_chars=max_content_chars,
+                            cleaning_conf=fallback_conf,
+                        )
+                        if len(fallback_text) >= min_content_chars:
+                            text_content = fallback_text
+                            cleaning_stats = fallback_stats
+                            cleaning_stats["cleaning_mode"] = "disabled"
+                            cleaning_stats["fallback_used"] = "disabled_cleaning"
+                            logger.warning(
+                                "网页清洗回退: url=%s reason=too_short_with_cleaning cleaned_chars=%s fallback_chars=%s",
+                                url,
+                                cleaned_chars,
+                                len(fallback_text),
+                            )
+                    except Exception as fallback_error:
+                        logger.warning(
+                            "网页清洗回退失败: url=%s reason=%s", url, fallback_error
+                        )
+
+            if len(text_content) < min_content_chars:
                 failed += 1
                 details.append(
                     {
                         "url": url,
                         "status": "failed",
-                        "reason": f"content_too_short:{len(content)}",
+                        "reason": f"content_too_short:{len(text_content)}",
                     }
                 )
                 logger.warning(
-                    "网页入库失败: url=%s content_too_short=%s", url, len(content)
+                    "网页入库失败: url=%s content_too_short=%s", url, len(text_content)
                 )
                 continue
 
-            md5_hex = hashlib.md5(content.encode("utf-8")).hexdigest()
+            md5_hex = hashlib.md5(text_content.encode("utf-8")).hexdigest()
             old_entry = manifest.get(source, {})
             old_md5 = str(old_entry.get("md5", ""))
 
@@ -770,7 +957,7 @@ class VectorStoreService:
                 continue
 
             splitter = self._get_splitter(source_type="web_url")
-            chunks = splitter.split_text(content)
+            chunks = splitter.split_text(text_content)
             chunks = [chunk for chunk in chunks if str(chunk).strip()]
             if not chunks:
                 failed += 1
@@ -806,11 +993,23 @@ class VectorStoreService:
 
             if is_update:
                 updated += 1
-                details.append({"url": url, "status": "updated"})
+                details.append(
+                    {
+                        "url": url,
+                        "status": "updated",
+                        "cleaning": cleaning_stats,
+                    }
+                )
                 logger.info("网页入库更新: url=%s chunks=%s", url, len(chunks))
             else:
                 added += 1
-                details.append({"url": url, "status": "added"})
+                details.append(
+                    {
+                        "url": url,
+                        "status": "added",
+                        "cleaning": cleaning_stats,
+                    }
+                )
                 logger.info("网页入库新增: url=%s chunks=%s", url, len(chunks))
 
         self._save_manifest(manifest)

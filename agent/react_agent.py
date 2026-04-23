@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
 import re
+import inspect
+import sqlite3
 import uuid
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain_openai import ChatOpenAI
 
 from agent.middleware import (
     clear_tool_events,
@@ -17,8 +21,103 @@ from agent.middleware import (
 )
 from agent.tools.registry import get_registered_tool_map, register_tools
 from model.factory import chat_model
+from utils.config_handler import memory_conf
 from utils.log import logger
 from utils.prompt_loader import load_system_prompt
+
+try:
+    from langgraph.checkpoint.sqlite import SqliteSaver
+except Exception:  # pragma: no cover
+    SqliteSaver = None
+
+try:
+    from langchain.agents.middleware import SummarizationMiddleware
+except Exception:  # pragma: no cover
+    SummarizationMiddleware = None
+
+
+def _looks_like_env_var(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Z_][A-Z0-9_]*", (value or "").strip()))
+
+
+def _resolve_secret(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    env_value = (os.environ.get(text) or "").strip()
+    if env_value:
+        return env_value
+    if _looks_like_env_var(text):
+        return ""
+    return text
+
+
+def _build_summarizer_model() -> ChatOpenAI:
+    conf = memory_conf.get("summarizer_model", {})
+    model_name = (
+        str(conf.get("model_name", "")).strip()
+        or str(memory_conf.get("summarizer_model_name", "")).strip()
+    )
+    if not model_name:
+        model_name = "Pro/MiniMaxAI/MiniMax-M2.5"
+    temperature = float(conf.get("temperature", 0.2))
+    kwargs: dict[str, Any] = {"model": model_name, "temperature": temperature}
+    base_url = str(conf.get("base_url", "")).strip()
+    api_key = _resolve_secret(str(conf.get("api_key", "")).strip())
+    if base_url:
+        kwargs["base_url"] = base_url
+    if api_key:
+        kwargs["api_key"] = api_key
+    return ChatOpenAI(**kwargs)
+
+
+def _build_summarization_middleware() -> Any | None:
+    conf = memory_conf.get("summarization", {})
+    if not bool(conf.get("enabled", True)):
+        return None
+    if SummarizationMiddleware is None:
+        logger.warning(
+            "[react_agent] SummarizationMiddleware unavailable, skipping summarization."
+        )
+        return None
+
+    trigger_conf = conf.get("trigger", {})
+    keep_conf = conf.get("keep", {})
+    kwargs: dict[str, Any] = {}
+    try:
+        parameters = set(inspect.signature(SummarizationMiddleware.__init__).parameters)
+    except Exception:
+        parameters = set()
+
+    def _set_if_supported(name: str, value: Any) -> None:
+        if not parameters or name in parameters:
+            kwargs[name] = value
+
+    _set_if_supported("model", _build_summarizer_model())
+    _set_if_supported(
+        "max_tokens_before_summary",
+        int(trigger_conf.get("max_tokens_before_summary", 3000)),
+    )
+    _set_if_supported("messages_to_keep", int(keep_conf.get("messages", 8)))
+    max_message_count = int(trigger_conf.get("max_message_count", 14))
+    for candidate in (
+        "max_messages_before_summary",
+        "max_message_count",
+        "max_messages",
+    ):
+        _set_if_supported(candidate, max_message_count)
+    max_chars = int(trigger_conf.get("max_chars", 12000))
+    for candidate in ("max_chars", "max_characters_before_summary"):
+        _set_if_supported(candidate, max_chars)
+
+    try:
+        return SummarizationMiddleware(**kwargs)
+    except Exception as error:
+        logger.warning(
+            "[react_agent] SummarizationMiddleware init failed: %s. Falling back without summarization.",
+            error,
+        )
+        return None
 
 
 class ReactAgent:
@@ -29,25 +128,37 @@ class ReactAgent:
     - 先做轻量路由（查书/算数/混合），可选任务拆解
     """
 
-    def __init__(self) -> None:
+    def __init__(self, thread_id: str, db_path: str) -> None:
+        self.thread_id = (thread_id or "").strip()
+        self.db_path = (db_path or "").strip()
         self.tools_map = get_registered_tool_map()
         self.inline_tool_names = set(self.tools_map.keys())
         logger.info(
-            "[react_agent] init tools_count=%s tools=%s",
+            "[react_agent] init thread=%s tools_count=%s tools=%s",
+            self.thread_id,
             len(self.inline_tool_names),
             sorted(self.inline_tool_names),
         )
+        if SqliteSaver is None:
+            raise RuntimeError("langgraph-checkpoint-sqlite 未安装，无法启用短期记忆。")
+        self._checkpoint_conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.checkpointer = SqliteSaver(self._checkpoint_conn)
+        middlewares: list[Any] = [
+            monitor_tool,
+            log_model_call,
+            log_before_model,
+            log_after_model,
+            report_prompt_switch,
+        ]
+        summarization_middleware = _build_summarization_middleware()
+        if summarization_middleware is not None:
+            middlewares.append(summarization_middleware)
         self.agent = create_agent(
             model=chat_model,
             tools=register_tools(),
             system_prompt=load_system_prompt(),
-            middleware=[
-                monitor_tool,
-                log_model_call,
-                log_before_model,
-                log_after_model,
-                report_prompt_switch,
-            ],
+            middleware=middlewares,
+            checkpointer=self.checkpointer,
         )
 
     # ---------- routing & planning ----------
@@ -262,7 +373,9 @@ class ReactAgent:
     # ---------- streaming entry ----------
     def execute_stream(self, query: str):
         trace_id = uuid.uuid4().hex[:8]
-        logger.info(f"[react_agent][{trace_id}] received query")
+        logger.info(
+            "[react_agent][%s] received query thread=%s", trace_id, self.thread_id
+        )
         logger.debug(
             "[react_agent][%s] query_preview=%s", trace_id, (query or "")[:300]
         )
@@ -318,6 +431,7 @@ class ReactAgent:
             for message_chunk, metadata in self.agent.stream(
                 input_dict,
                 stream_mode="messages",
+                config={"configurable": {"thread_id": self.thread_id}},
                 context={"report": False, "trace_id": trace_id},
             ):
                 for pending in _drain_tool_events():
@@ -471,3 +585,15 @@ class ReactAgent:
         finally:
             logger.info(f"[react_agent][{trace_id}] stream finished")
             clear_tool_events(trace_id)
+
+    def close(self) -> None:
+        try:
+            if hasattr(self.checkpointer, "close"):
+                self.checkpointer.close()
+        except Exception as error:
+            logger.debug("[react_agent] close checkpointer failed: %s", error)
+        try:
+            if hasattr(self, "_checkpoint_conn") and self._checkpoint_conn is not None:
+                self._checkpoint_conn.close()
+        except Exception as error:
+            logger.debug("[react_agent] close checkpoint conn failed: %s", error)

@@ -5,6 +5,9 @@
 ## 核心能力
 
 - 通信领域 ReAct 智能体
+- 智能体多会话标签页（左侧垂直会话列表，支持新建/切换/重命名/关闭）
+- 短期记忆（`langgraph-checkpoint-sqlite`，每会话独立 `memory_db/thread_<n>.db`）
+- 会话压缩（`SummarizationMiddleware`，触发策略与模型配置见 `agent/config/memory_config.yml`）
 - RAG 检索问答（Hybrid 召回 + 启发式重排 + 引用片段）
 - 长时记忆写入与检索（`store_memory` / `search_memory`）
 - 在线知识库上传与管理（文本上传 + 网页链接抓取入库）
@@ -34,7 +37,7 @@ agent_study_record/
 ├─ model/                  # ChatModel 与 Embedding 工厂
 ├─ model/config/           # 模型与推理配置
 ├─ rag/config/             # 向量检索参数与网页抓取参数
-├─ agent/config/           # 提示词路径映射
+├─ agent/config/           # 提示词路径映射与记忆配置
 ├─ agent/prompts/          # Agent 提示词
 ├─ rag/prompts/            # RAG 提示词
 ├─ data/                   # 知识源文件
@@ -104,6 +107,9 @@ Launch.ps1
 ## Gradio 页面与 API
 
 - 智能体对话：流式 ReAct 交互
+  - `stream_thread_reply`（按 thread_id 处理多会话）
+  - `create_chat_thread` / `switch_chat_thread` / `rename_chat_thread` / `close_chat_thread`
+  - 会话会在重启后从 `memory_db/thread_<n>.db` 恢复；关闭会话即删除对应 db
 - 在线 RAG：`rag_query`
   - `rag_metrics_refresh`
   - `rag_metrics_reset`

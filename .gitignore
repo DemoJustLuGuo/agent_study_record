@@ -27,6 +27,7 @@ logs/
 **/chroma_snapshots/
 **/md5.text
 **/chroma_manifest.json
+memory_db/
 
 # vscode目录
 .vscode/

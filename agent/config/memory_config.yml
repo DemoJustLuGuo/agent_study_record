@@ -1,0 +1,23 @@
+checkpoint:
+  memory_db_dir: memory_db
+  thread_prefix: thread_
+
+summarization:
+  enabled: true
+  trigger:
+    mode: any
+    max_message_count: 14
+    max_chars: 12000
+    max_tokens_before_summary: 3000
+  keep:
+    messages: 8
+
+title_generation:
+  enabled: true
+  max_length: 50
+
+summarizer_model:
+  model_name: Pro/MiniMaxAI/MiniMax-M2.5
+  temperature: 0.2
+  base_url: https://api.siliconflow.cn/v1
+  api_key: SILICONFLOW_API_KEY

@@ -9,5 +9,6 @@ langchain-text-splitters==1.1.1
 langchain-chroma==1.1.0
 langgraph==1.1.0
 langgraph-prebuilt==1.0.8
+langgraph-checkpoint-sqlite
 chromadb==1.5.5
 pypdf==6.9.0

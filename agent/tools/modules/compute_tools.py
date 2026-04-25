@@ -1,6 +1,7 @@
 from typing import Any
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from agent.tools.modules.shared import format_tool_failure, truncate_output
 from utils.log import logger
@@ -59,8 +60,34 @@ def _normalize_result(prefix: str, result: Any) -> str:
     return truncate_output(text)
 
 
-@tool(description="执行Python代码并返回执行结果，适用于通信算法快速计算、验证与仿真")
+class PythonCodeArgs(BaseModel):
+    code: str = Field(
+        description=(
+            "需要执行的 Python 代码片段。适用于通信算法计算、数值验证、"
+            "小规模仿真和数据处理；代码为空时工具会返回可解释失败信息。"
+        )
+    )
+
+
+class MatlabCodeArgs(BaseModel):
+    code: str = Field(
+        description=(
+            "需要执行的 MATLAB 代码片段。适用于矩阵运算、通信系统仿真和"
+            "信号处理验证；代码为空时工具会返回可解释失败信息。"
+        )
+    )
+
+
+@tool(
+    args_schema=PythonCodeArgs,
+    description=(
+        "执行 Python 代码并返回结果。用于通信算法快速计算、公式验证、"
+        "小规模仿真和数据处理；该工具具有高风险，应避免执行文件删除、"
+        "网络访问或长期运行任务。"
+    ),
+)
 def python(code: str) -> str:
+    """执行 Python 代码并返回 stdout/stderr 或异常说明。"""
     code = (code or "").strip()
     if not code:
         return format_tool_failure(
@@ -85,8 +112,15 @@ def python(code: str) -> str:
         )
 
 
-@tool(description="执行MATLAB代码并返回执行结果，基于matlabengine模块")
+@tool(
+    args_schema=MatlabCodeArgs,
+    description=(
+        "执行 MATLAB 代码并返回结果。用于通信系统仿真、矩阵运算、"
+        "调制解调和信号处理验证；该工具依赖 MATLAB Engine，属于高风险工具。"
+    ),
+)
 def matlab(code: str) -> str:
+    """执行 MATLAB 代码并返回 evalc 输出或异常说明。"""
     code = (code or "").strip()
     if not code:
         return format_tool_failure(

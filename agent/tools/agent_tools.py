@@ -12,6 +12,7 @@ from agent.tools.modules.memory_tools import search_memory, store_memory
 from agent.tools.modules.rag_tools import rag_summarize
 from agent.tools.modules.web_tools import web_search
 from agent.tools.registry import (
+    get_registered_tool_entries,
     get_registered_tool_map,
     get_registered_tool_names,
     register_tools,
@@ -26,6 +27,7 @@ __all__ = [
     "store_memory",
     "search_memory",
     "register_tools",
+    "get_registered_tool_entries",
     "get_registered_tool_map",
     "get_registered_tool_names",
 ]

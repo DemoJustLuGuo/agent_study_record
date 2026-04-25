@@ -12,3 +12,4 @@ langgraph-prebuilt==1.0.8
 langgraph-checkpoint-sqlite
 chromadb==1.5.5
 pypdf==6.9.0
+pytest>=8,<9

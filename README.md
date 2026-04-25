@@ -1,6 +1,6 @@
 # 通信系统智能体项目（Agent + RAG）
 
-基于 `LangChain + LangGraph + Gradio + ChromaDB` 的通信领域智能体项目，支持 ReAct 工具调用、知识库检索增强（RAG）、长时记忆，以及知识库生命周期管理（同步/快照/回滚）。
+这是一个基于 `LangChain + LangGraph + Gradio + ChromaDB` 的通信领域智能体项目，支持 ReAct 工具调用、知识库检索增强（RAG）、长时记忆，以及知识库生命周期管理（同步/快照/回滚）。
 
 ## 核心能力
 
@@ -14,18 +14,52 @@
   - 网页抓取默认启用保守清洗：过滤广告、弹窗、页脚/侧栏等明显噪声区域
 - 工具调用过程可观测（日志 + Trace）
 
-## 技术栈
+## 快速开始
+  
+### (1) 安装依赖
 
-- `Python 3.10+`
-- `gradio==5.49.1`
-- `langchain==1.2.11`
-- `langchain-core==1.2.18`
-- `langgraph==1.1.0`
-- `langgraph-prebuilt==1.0.8`（与当前 `langgraph` 版本保持兼容）
-- `langchain-chroma==1.1.0`
-- `chromadb==1.5.5`
-- `langchain-openai`（OpenAI 兼容接口，当前默认 SiliconFlow）
-- `langchain-experimental`（`PythonREPLTool`）
+```bash
+pip install -r requirements.txt
+```
+
+### (2) 配置模型
+
+编辑 `model/config/agent.yml` 或设置环境变量：
+
+- `OPENAI_API_KEY`（可填环境变量名，如 `SILICONFLOW_API_KEY`）
+- `openai_base_url`（默认 `https://api.siliconflow.cn/v1`）
+- `chat_model_name`
+- `embedding_model_name`
+
+### (3) 初始化知识库（建议）
+
+```bash
+python rag/vector_store.py load
+```
+
+### (4) 启动应用
+
+python：
+```bash
+python -m app.main
+```
+
+Windows：
+
+```bat
+launch.bat
+```
+
+PowerShell：
+
+```powershell
+Launch.ps1
+```
+
+默认访问地址：`http://127.0.0.1:7860`
+
+日志等级可通过环境变量 `LOG_LEVEL` 控制（`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`）。
+
 
 ## 目录结构（核心）
 
@@ -62,47 +96,6 @@ agent_study_record/
 - `matlab`
 - `store_memory`
 - `search_memory`
-
-## 快速开始
-
-### (1) 安装依赖
-
-```bash
-pip install -r requirements.txt
-```
-
-### (2) 配置模型
-
-编辑 `model/config/agent.yml` 或设置环境变量：
-
-- `OPENAI_API_KEY`（可填环境变量名，如 `SILICONFLOW_API_KEY`）
-- `openai_base_url`（默认 `https://api.siliconflow.cn/v1`）
-- `chat_model_name`
-- `embedding_model_name`
-
-### (3) 初始化知识库（建议）
-
-```bash
-python rag/vector_store.py load
-```
-
-### (4) 启动应用
-
-Windows：
-
-```bat
-launch.bat
-```
-
-PowerShell：
-
-```powershell
-Launch.ps1
-```
-
-默认访问地址：`http://127.0.0.1:7860`
-
-日志等级可通过环境变量 `LOG_LEVEL` 控制（`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`）。
 
 ## Gradio 页面与 API
 

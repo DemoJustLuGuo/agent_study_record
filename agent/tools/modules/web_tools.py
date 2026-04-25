@@ -3,6 +3,7 @@ from urllib.parse import quote
 import xml.etree.ElementTree as ET
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from agent.tools.modules.shared import (
     format_tool_failure,
@@ -13,6 +14,15 @@ from utils.log import logger
 
 WEB_SEARCH_TIMEOUT_SECONDS = 15
 BING_CN_SEARCH_URL = "https://cn.bing.com/search?q="
+
+
+class WebSearchArgs(BaseModel):
+    query: str = Field(
+        description=(
+            "公开网络检索关键词，建议 2-20 个词。用于标准、术语、参数范围、"
+            "行业资料和实时事实核验；查询为空时返回可解释失败信息。"
+        )
+    )
 
 
 def _parse_bing_rss_items(rss_text: str, max_items: int = 5) -> list[str]:
@@ -55,9 +65,14 @@ def _parse_bing_rss_items(rss_text: str, max_items: int = 5) -> list[str]:
 
 
 @tool(
-    description="联网搜索公开信息并返回前几条结果摘要，适用于标准、术语、参数范围、行业资料快速核验"
+    args_schema=WebSearchArgs,
+    description=(
+        "联网搜索公开信息并返回前几条摘要结果。用于通信标准、术语、"
+        "参数范围、行业资料和实时事实的快速核验；当前实现使用必应中国 RSS。"
+    ),
 )
 def web_search(query: str) -> str:
+    """通过必应中国 RSS 检索公开网页摘要。"""
     query = (query or "").strip()
     if not query:
         return format_tool_failure(

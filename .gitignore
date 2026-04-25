@@ -38,3 +38,6 @@ Thumbs.db
 
 # Jetbrains IDEs
 .idea/
+
+# code agents工具
+.codex/

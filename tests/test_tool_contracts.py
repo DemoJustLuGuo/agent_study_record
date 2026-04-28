@@ -68,4 +68,6 @@ def test_format_tool_failure_contract() -> None:
         solution="补充必填参数",
     )
 
-    assert result == "【失败】example_tool调用失败\n原因：输入无效\n建议：补充必填参数"
+    assert (
+        result == "【失败】example_tool调用失败\n原因：输入无效\n解决方案：补充必填参数"
+    )

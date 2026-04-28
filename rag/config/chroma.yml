@@ -38,7 +38,7 @@ auto_sync_before_retrieval: true
 auto_sync_min_interval_seconds: 15
 document_loader:
   loader_priority:
-    pdf: ["marker", "unstructured_pdf", "pypdf"]
+    pdf: ["pypdf"]
     txt: ["text"]
     md: ["unstructured_markdown", "text"]
     docx: ["unstructured_docx", "text"]
@@ -46,12 +46,6 @@ document_loader:
     htm: ["unstructured_html", "text"]
     csv: ["csv"]
   pdf:
-    marker_enabled: true
-    marker_command: marker_single
-    marker_timeout_seconds: 300
-    unstructured_mode: elements
-    unstructured_strategy: hi_res
-    infer_table_structure: true
     pypdf_mode: page
     pypdf_extraction_mode: layout
 web_source:

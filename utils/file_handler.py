@@ -1,9 +1,6 @@
 import hashlib
 import importlib.util
 import os
-import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -14,7 +11,6 @@ from langchain_community.document_loaders import (
     TextLoader,
     UnstructuredHTMLLoader,
     UnstructuredMarkdownLoader,
-    UnstructuredPDFLoader,
     UnstructuredWordDocumentLoader,
 )
 
@@ -23,7 +19,7 @@ from utils.log import logger
 LoaderFunc = Callable[[str, dict[str, Any]], list[Document]]
 
 DEFAULT_LOADER_PRIORITY: dict[str, list[str]] = {
-    "pdf": ["marker", "unstructured_pdf", "pypdf"],
+    "pdf": ["pypdf"],
     "txt": ["text"],
     "md": ["unstructured_markdown", "text"],
     "docx": ["unstructured_docx", "text"],
@@ -93,102 +89,6 @@ def _load_with_pypdf(filepath: str, loader_conf: dict[str, Any]) -> list[Documen
     ).load()
 
 
-def _load_with_unstructured_pdf(
-    filepath: str, loader_conf: dict[str, Any]
-) -> list[Document]:
-    if importlib.util.find_spec("unstructured") is None:
-        raise RuntimeError("未安装unstructured依赖")
-
-    pdf_conf = loader_conf.get("pdf", {})
-    mode = str(pdf_conf.get("unstructured_mode", "elements"))
-    prefer_strategy = str(pdf_conf.get("unstructured_strategy", "hi_res"))
-    infer_table_structure = bool(pdf_conf.get("infer_table_structure", True))
-
-    try:
-        return UnstructuredPDFLoader(
-            filepath,
-            mode=mode,
-            strategy=prefer_strategy,
-            infer_table_structure=infer_table_structure,
-        ).load()
-    except Exception as first_error:
-        if prefer_strategy != "fast":
-            logger.warning(
-                "UnstructuredPDFLoader策略%s失败，降级到fast: %s",
-                prefer_strategy,
-                first_error,
-            )
-            return UnstructuredPDFLoader(
-                filepath,
-                mode=mode,
-                strategy="fast",
-                infer_table_structure=False,
-            ).load()
-        raise
-
-
-def _collect_marker_markdown_files(output_dir: Path) -> list[Path]:
-    candidates = []
-    for ext in ("*.md", "*.markdown"):
-        candidates.extend(output_dir.rglob(ext))
-    return sorted(candidates)
-
-
-def _load_with_marker(filepath: str, loader_conf: dict[str, Any]) -> list[Document]:
-    pdf_conf = loader_conf.get("pdf", {})
-    marker_enabled = bool(pdf_conf.get("marker_enabled", True))
-    if not marker_enabled:
-        raise RuntimeError("Marker loader is disabled by config")
-
-    marker_timeout_seconds = int(pdf_conf.get("marker_timeout_seconds", 300))
-    command = (
-        str(pdf_conf.get("marker_command", "marker_single")).strip() or "marker_single"
-    )
-    if shutil.which(command) is None:
-        raise RuntimeError(f"未找到Marker命令: {command}")
-
-    with tempfile.TemporaryDirectory(prefix="marker_parse_") as tmp_dir:
-        output_dir = Path(tmp_dir)
-        run_cmd = [
-            command,
-            filepath,
-            "--output_format",
-            "markdown",
-            "--output_dir",
-            str(output_dir),
-        ]
-
-        try:
-            completed = subprocess.run(
-                run_cmd,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=marker_timeout_seconds,
-            )
-        except FileNotFoundError as e:
-            raise RuntimeError(f"Marker命令不可用: {command}") from e
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError(f"Marker解析超时: {marker_timeout_seconds}s") from e
-        except subprocess.CalledProcessError as e:
-            stderr_text = (e.stderr or "").strip()
-            raise RuntimeError(f"Marker解析失败: {stderr_text}") from e
-
-        markdown_files = _collect_marker_markdown_files(output_dir)
-        if not markdown_files:
-            stdout_text = (completed.stdout or "").strip()
-            stderr_text = (completed.stderr or "").strip()
-            raise RuntimeError(
-                "Marker解析后未产出markdown文件"
-                f" stdout={stdout_text[:120]} stderr={stderr_text[:120]}"
-            )
-
-        docs: list[Document] = []
-        for md_file in markdown_files:
-            docs.extend(TextLoader(str(md_file), encoding="utf-8").load())
-        return docs
-
-
 def _load_with_unstructured_markdown(
     filepath: str, _: dict[str, Any]
 ) -> list[Document]:
@@ -214,8 +114,6 @@ def _load_with_csv(filepath: str, _: dict[str, Any]) -> list[Document]:
 
 
 LOADER_FUNC_MAP: dict[str, LoaderFunc] = {
-    "marker": _load_with_marker,
-    "unstructured_pdf": _load_with_unstructured_pdf,
     "pypdf": _load_with_pypdf,
     "text": _load_with_text,
     "unstructured_markdown": _load_with_unstructured_markdown,

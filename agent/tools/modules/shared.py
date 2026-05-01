@@ -38,6 +38,12 @@ def run_subprocess(command: list[str], tool_name: str) -> str:
             timeout=TOOL_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
+        logger.warning(
+            "[tool] subprocess timeout tool=%s timeout_s=%s command=%s",
+            tool_name,
+            TOOL_TIMEOUT_SECONDS,
+            command,
+        )
         return format_tool_failure(
             tool_name=tool_name,
             reason=f"执行超时（>{TOOL_TIMEOUT_SECONDS}s）",

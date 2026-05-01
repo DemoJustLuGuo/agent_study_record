@@ -81,6 +81,14 @@ npx skills add langchain-ai/langchain-skills --skill '*' --yes --global
 
 在 Windows PowerShell 或项目根目录执行。不要只写通用命令，必须带上本项目的入口、路径或参数。
 
+### 4.0 Python 虚拟环境强制规则
+
+- 当仓库存在 Python 虚拟环境目录（通常为 `venv/` 或 `.venv/`）时，所有 Python 相关操作必须通过该虚拟环境执行，包括但不限于 `python`、`pytest`、`pip`、`black`、`compileall`。
+- 推荐方式：
+  - 直接使用虚拟环境解释器，例如 `.venv\Scripts\python -m pytest tests -q`。
+  - 或先按当前 shell 激活虚拟环境，再执行命令，例如 PowerShell 使用 `.venv\Scripts\Activate.ps1` 后再运行 `python ...`。
+- 若检测到存在虚拟环境但当前命令未使用虚拟环境，视为不符合本项目执行规范。
+
 ### 环境与启动
 
 ```powershell

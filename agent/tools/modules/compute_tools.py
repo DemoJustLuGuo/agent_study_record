@@ -1,4 +1,5 @@
 from typing import Any
+from threading import Lock
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -19,38 +20,42 @@ except Exception:  # pragma: no cover
 
 _python_repl_tool: Any = None
 _matlab_engine_session: Any = None
+_python_repl_lock = Lock()
+_matlab_engine_lock = Lock()
 
 
 def _get_python_repl_tool() -> Any:
     global _python_repl_tool
-    if _python_repl_tool is not None:
+    with _python_repl_lock:
+        if _python_repl_tool is not None:
+            return _python_repl_tool
+
+        if PythonREPLTool is None:
+            raise RuntimeError(
+                "未安装PythonREPLTool依赖，请先安装 langchain-experimental（例如：pip install langchain-experimental）。"
+            )
+
+        _python_repl_tool = PythonREPLTool()
         return _python_repl_tool
-
-    if PythonREPLTool is None:
-        raise RuntimeError(
-            "未安装PythonREPLTool依赖，请先安装 langchain-experimental（例如：pip install langchain-experimental）。"
-        )
-
-    _python_repl_tool = PythonREPLTool()
-    return _python_repl_tool
 
 
 def _get_matlab_engine() -> Any:
     global _matlab_engine_session
-    if _matlab_engine_session is not None:
+    with _matlab_engine_lock:
+        if _matlab_engine_session is not None:
+            return _matlab_engine_session
+
+        if matlab_engine is None:
+            raise RuntimeError(
+                "未安装matlabengine模块，请先在MATLAB支持的Python环境中安装 matlabengine 后重试。"
+            )
+
+        try:
+            _matlab_engine_session = matlab_engine.start_matlab()
+        except Exception as exc:
+            raise RuntimeError(f"启动MATLAB Engine失败: {str(exc)}") from exc
+
         return _matlab_engine_session
-
-    if matlab_engine is None:
-        raise RuntimeError(
-            "未安装matlabengine模块，请先在MATLAB支持的Python环境中安装 matlabengine 后重试。"
-        )
-
-    try:
-        _matlab_engine_session = matlab_engine.start_matlab()
-    except Exception as exc:
-        raise RuntimeError(f"启动MATLAB Engine失败: {str(exc)}") from exc
-
-    return _matlab_engine_session
 
 
 def _normalize_result(prefix: str, result: Any) -> str:

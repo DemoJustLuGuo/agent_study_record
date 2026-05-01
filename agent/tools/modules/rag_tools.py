@@ -20,8 +20,7 @@ def _get_rag_service() -> "RAGSummarizeService":
             from rag.rag_service import RAGSummarizeService
 
             _rag = RAGSummarizeService()
-
-    return _rag
+        return _rag
 
 
 class RAGSummarizeArgs(BaseModel):

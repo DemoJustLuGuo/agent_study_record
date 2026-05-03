@@ -20,8 +20,7 @@ def _get_memory_service() -> "LongTermMemoryService":
             from rag.memory_service import LongTermMemoryService
 
             _memory = LongTermMemoryService()
-
-    return _memory
+        return _memory
 
 
 class StoreMemoryArgs(BaseModel):
@@ -31,18 +30,26 @@ class StoreMemoryArgs(BaseModel):
             "不要写入临时对话过程、敏感密钥或未经确认的推测。"
         )
     )
-    user_id: str = Field(default="global", description="用户标识，单用户本地模式默认 global。")
+    user_id: str = Field(
+        default="global", description="用户标识，单用户本地模式默认 global。"
+    )
     scope: str = Field(
         default="preference",
         description="记忆范围标签，例如 preference、project、fact、constraint。",
     )
-    project: str = Field(default="", description="可选项目标签，用于按项目隔离长期记忆。")
+    project: str = Field(
+        default="", description="可选项目标签，用于按项目隔离长期记忆。"
+    )
 
 
 class SearchMemoryArgs(BaseModel):
-    query: str = Field(description="长期记忆检索问题，用于查找用户偏好、项目笔记或跨会话事实。")
+    query: str = Field(
+        description="长期记忆检索问题，用于查找用户偏好、项目笔记或跨会话事实。"
+    )
     user_id: str = Field(default="global", description="用户标识，默认 global。")
-    project: str = Field(default="", description="可选项目过滤条件；为空时不按项目过滤。")
+    project: str = Field(
+        default="", description="可选项目过滤条件；为空时不按项目过滤。"
+    )
 
 
 @tool(

@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
@@ -126,11 +127,10 @@ def normalize_markdown_layout(text: str) -> str:
 
 def get_thread_store() -> ChatThreadStore:
     global thread_store
-    if thread_store is None:
-        with thread_store_lock:
-            if thread_store is None:
-                thread_store = ChatThreadStore()
-    return thread_store
+    with thread_store_lock:
+        if thread_store is None:
+            thread_store = ChatThreadStore()
+        return thread_store
 
 
 def _thread_choices(threads: list[dict[str, Any]]) -> list[tuple[str, str]]:
@@ -176,24 +176,22 @@ def _close_agent(thread_id: str) -> None:
 
 def get_knowledge_base_service() -> "KnowledgeBaseService":
     global knowledge_base_service
-    if knowledge_base_service is None:
-        with knowledge_base_lock:
-            if knowledge_base_service is None:
-                from rag.knowledge_base import KnowledgeBaseService
+    with knowledge_base_lock:
+        if knowledge_base_service is None:
+            from rag.knowledge_base import KnowledgeBaseService
 
-                knowledge_base_service = KnowledgeBaseService()
-    return knowledge_base_service
+            knowledge_base_service = KnowledgeBaseService()
+        return knowledge_base_service
 
 
 def get_rag_service() -> "RAGSummarizeService":
     global rag_service
-    if rag_service is None:
-        with rag_service_lock:
-            if rag_service is None:
-                from rag.rag_service import RAGSummarizeService
+    with rag_service_lock:
+        if rag_service is None:
+            from rag.rag_service import RAGSummarizeService
 
-                rag_service = RAGSummarizeService()
-    return rag_service
+            rag_service = RAGSummarizeService()
+        return rag_service
 
 
 def _mask_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -399,6 +397,11 @@ def create_chat_thread(current_thread_id: str):
     store = get_thread_store()
     created = store.create_thread()
     thread_id = str(created["thread_id"])
+    logger.debug(
+        "[chat][ui] thread_create current=%s created=%s",
+        (current_thread_id or "").strip(),
+        thread_id,
+    )
     threads = store.list_threads()
     return (
         gr.update(choices=_thread_choices(threads), value=thread_id),
@@ -410,6 +413,11 @@ def create_chat_thread(current_thread_id: str):
 
 def switch_chat_thread(thread_id: str):
     selected = _ensure_thread_exists(thread_id)
+    logger.debug(
+        "[chat][ui] thread_switch requested=%s selected=%s",
+        (thread_id or "").strip(),
+        selected,
+    )
     history = get_thread_store().load_messages(selected)
     threads = get_thread_store().list_threads()
     return (
@@ -423,6 +431,12 @@ def switch_chat_thread(thread_id: str):
 def rename_chat_thread(thread_id: str, new_title: str):
     selected = _ensure_thread_exists(thread_id)
     title = (new_title or "").strip()
+    logger.debug(
+        "[chat][ui] thread_rename requested=%s target=%s title_len=%s",
+        (thread_id or "").strip(),
+        selected,
+        len(title),
+    )
     if not title:
         return (
             gr.update(),
@@ -451,6 +465,11 @@ def rename_chat_thread(thread_id: str, new_title: str):
 def close_chat_thread(thread_id: str):
     store = get_thread_store()
     selected = _ensure_thread_exists(thread_id)
+    logger.debug(
+        "[chat][ui] thread_close requested=%s selected=%s",
+        (thread_id or "").strip(),
+        selected,
+    )
     _close_agent(selected)
     store.delete_thread(selected)
     threads = store.list_threads()
@@ -488,6 +507,14 @@ def stream_thread_reply(
     chunks: list[str] = []
     thinking_shown = False
     try:
+        timeout_seconds = max(
+            int(memory_conf.get("chat_response_timeout_seconds", 180)),
+            1,
+        )
+    except Exception:
+        timeout_seconds = 180
+    started_at = time.perf_counter()
+    try:
         store.append_message(selected, role="user", content=prompt)
         runtime_agent = get_agent(selected)
         logger.info(
@@ -497,6 +524,14 @@ def stream_thread_reply(
             len(current_history),
         )
         for chunk in runtime_agent.execute_stream(prompt):
+            elapsed_seconds = time.perf_counter() - started_at
+            if elapsed_seconds > timeout_seconds:
+                logger.warning(
+                    "[chat] response timeout thread=%s timeout_s=%s",
+                    selected,
+                    timeout_seconds,
+                )
+                raise TimeoutError(f"智能体响应超时（>{timeout_seconds}s）")
             if chunk is None:
                 continue
             raw_chunk = str(chunk)
@@ -542,6 +577,12 @@ def stream_thread_reply(
             thinking_shown,
         )
         yield current_history, "", status, selector_update
+    except TimeoutError as error:
+        logger.warning("[chat] request timeout thread=%s reason=%s", selected, error)
+        error_message = "⚠️ 智能体响应超时，请稍后重试。"
+        current_history[-1]["content"] = error_message
+        store.append_message(selected, role="assistant", content=error_message)
+        yield current_history, "", _chat_status(selected, "响应超时"), gr.update()
     except Exception:
         logger.exception("[chat] request failed thread=%s", selected)
         error_message = "⚠️ 系统错误：智能体处理失败，请稍后重试。"

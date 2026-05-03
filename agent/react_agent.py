@@ -4,6 +4,7 @@ import os
 import re
 import inspect
 import sqlite3
+import time
 import uuid
 from typing import Any
 
@@ -160,6 +161,13 @@ class ReactAgent:
             middleware=middlewares,
             checkpointer=self.checkpointer,
         )
+
+    @staticmethod
+    def _preview_log_text(text: str, limit: int = 200) -> str:
+        normalized = (text or "").replace("\n", " ")
+        if len(normalized) > limit:
+            return normalized[:limit] + f"...(truncated,len={len(normalized)})"
+        return normalized
 
     # ---------- routing & planning ----------
     def _route_strategy(self, query: str) -> str:
@@ -377,11 +385,17 @@ class ReactAgent:
             "[react_agent][%s] received query thread=%s", trace_id, self.thread_id
         )
         logger.debug(
-            "[react_agent][%s] query_preview=%s", trace_id, (query or "")[:300]
+            "[react_agent][%s] query_preview=%s",
+            trace_id,
+            self._preview_log_text(query, limit=200),
         )
         messages = [{"role": "user", "content": query}]
         emitted_status: set[str] = set()
         clear_tool_events(trace_id)
+        stream_started = time.perf_counter()
+        output_parts: list[str] = []
+        stream_chunk_count = 0
+        stream_text_size = 0
 
         def _drain_tool_events() -> list[str]:
             messages_out: list[str] = []
@@ -495,9 +509,16 @@ class ReactAgent:
                     # 提取逐 token 的内容
                     token_content = getattr(message_chunk, "content", None) or ""
                     if token_content:
-                        logger.debug(
-                            f"[react_agent][{trace_id}] token len={len(token_content)}"
-                        )
+                        stream_chunk_count += 1
+                        stream_text_size += len(token_content)
+                        output_parts.append(token_content)
+                        if stream_chunk_count % 25 == 0:
+                            logger.debug(
+                                "[react_agent][%s] stream_progress chunks=%s chars=%s",
+                                trace_id,
+                                stream_chunk_count,
+                                stream_text_size,
+                            )
                         yield token_content
 
                     # 兜底：检查 tool_calls（非流式工具调用格式）
@@ -583,7 +604,15 @@ class ReactAgent:
             logger.error(f"[react_agent][{trace_id}] stream failed: {exc}")
             yield f"[ERROR] {exc}"
         finally:
-            logger.info(f"[react_agent][{trace_id}] stream finished")
+            elapsed_ms = (time.perf_counter() - stream_started) * 1000
+            logger.info(
+                "[react_agent][%s] stream finished elapsed_ms=%.1f chunks=%s chars=%s output_preview=%s",
+                trace_id,
+                elapsed_ms,
+                stream_chunk_count,
+                stream_text_size,
+                self._preview_log_text("".join(output_parts), limit=200),
+            )
             clear_tool_events(trace_id)
 
     def close(self) -> None:

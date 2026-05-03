@@ -25,9 +25,9 @@ from langgraph.types import Command
 from utils.log import LOG_ROOT, logger
 from utils.prompt_loader import load_report_prompt, load_system_prompt
 
-TRUNCATE_PREVIEW = 400
-TRUNCATE_RESULT = 800
-TRACE_MESSAGE_LIMIT = 8
+TRUNCATE_USER_MODEL_LOG = 200
+TRUNCATE_TOOL_ARGS_LOG = 800
+TRUNCATE_TOOL_RESULT_LOG = 1200
 TRACE_DIR = os.path.join(LOG_ROOT, "traces")
 os.makedirs(TRACE_DIR, exist_ok=True)
 _TOOL_EVENTS: dict[str, list[dict[str, str]]] = {}
@@ -48,11 +48,11 @@ def _log_prefix(runtime: Runtime | None) -> str:
 def _preview_text(text: str, limit: int) -> str:
     text = (text or "").replace("\n", " ")
     if len(text) > limit:
-        return text[:limit] + "...(truncated)"
+        return text[:limit] + f"...(truncated,len={len(text)})"
     return text
 
 
-def _preview_message(msg: Any, limit: int = TRUNCATE_PREVIEW) -> str:
+def _extract_message_content(msg: Any) -> str:
     try:
         if isinstance(msg, BaseMessage):
             content = msg.content
@@ -60,24 +60,40 @@ def _preview_message(msg: Any, limit: int = TRUNCATE_PREVIEW) -> str:
             content = msg.get("content", "")
         else:
             content = getattr(msg, "content", "") or str(msg)
-        return _preview_text(str(content), limit)
+        return str(content)
     except Exception:
         return "<unprintable>"
 
 
-def _message_snapshot(
-    messages: list[Any], limit: int = TRACE_MESSAGE_LIMIT
+def _preview_message(msg: Any, limit: int = TRUNCATE_USER_MODEL_LOG) -> str:
+    return _preview_text(_extract_message_content(msg), limit)
+
+
+def _message_snapshot_for_logs(
+    messages: list[Any], limit: int = 8
 ) -> list[dict[str, Any]]:
     snapshot = []
     for msg in messages[-limit:]:
+        content = _extract_message_content(msg)
         snapshot.append(
             {
                 "type": type(msg).__name__,
                 "role": getattr(msg, "type", getattr(msg, "role", "")),
-                "preview": _preview_message(msg),
-                "len": len(
-                    getattr(msg, "content", "") or str(getattr(msg, "content", ""))
-                ),
+                "preview": _preview_text(content, TRUNCATE_USER_MODEL_LOG),
+                "len": len(content),
+            }
+        )
+    return snapshot
+
+
+def _message_snapshot_for_trace(messages: list[Any]) -> list[dict[str, Any]]:
+    snapshot = []
+    for msg in messages:
+        snapshot.append(
+            {
+                "type": type(msg).__name__,
+                "role": getattr(msg, "type", getattr(msg, "role", "")),
+                "content": _extract_message_content(msg),
             }
         )
     return snapshot
@@ -95,6 +111,35 @@ def _result_messages(response: Any) -> list[Any]:
     if isinstance(response, list):
         return response
     return []
+
+
+def _extract_tool_result_text(result: ToolMessage | Command) -> str:
+    if isinstance(result, ToolMessage):
+        return _extract_message_content(result)
+    if hasattr(result, "content"):
+        return _extract_message_content(result)
+    return str(result)
+
+
+def _extract_python_or_matlab_code(tool_name: str, args_payload: Any) -> str:
+    if tool_name not in ("python", "matlab"):
+        return ""
+    if isinstance(args_payload, dict):
+        code = args_payload.get("code", "")
+        return str(code or "")
+    return str(args_payload or "")
+
+
+def _latest_user_message_preview(messages: list[Any]) -> str:
+    for msg in reversed(messages):
+        role = str(getattr(msg, "type", getattr(msg, "role", ""))).lower()
+        if role in ("human", "user"):
+            return _preview_text(_extract_message_content(msg), TRUNCATE_USER_MODEL_LOG)
+    if not messages:
+        return ""
+    return _preview_text(
+        _extract_message_content(messages[-1]), TRUNCATE_USER_MODEL_LOG
+    )
 
 
 def _write_trace(runtime: Runtime | None, event: str, **payload: Any) -> None:
@@ -156,47 +201,59 @@ def monitor_tool(
     """
     start = time.perf_counter()
     tool_name = request.tool_call["name"]
-    args_preview = _preview_text(
-        str(request.tool_call.get("args")), limit=TRUNCATE_PREVIEW
-    )
+    args_payload = request.tool_call.get("args")
+    args_text = str(args_payload)
+    args_preview = _preview_text(args_text, limit=TRUNCATE_TOOL_ARGS_LOG)
+    code_text = _extract_python_or_matlab_code(tool_name, args_payload)
+    code_preview = _preview_text(code_text, limit=TRUNCATE_TOOL_ARGS_LOG)
     trace_prefix = _log_prefix(request.runtime)
 
-    logger.info(
-        f"{trace_prefix}[tool] start name={tool_name} args_preview={args_preview}"
+    logger.debug(
+        f"{trace_prefix}[tool] start name={tool_name} args={args_preview}"
+        + (f" code_preview={code_preview}" if code_text else "")
     )
     _push_tool_event(request.runtime, "start", tool_name)
     _write_trace(
         request.runtime,
         "tool_start",
         tool=tool_name,
-        args_preview=args_preview,
+        args=args_text,
+        code=code_text,
     )
 
     try:
         result = handler(request)
         elapsed = (time.perf_counter() - start) * 1000
 
-        preview = ""
-        if isinstance(result, ToolMessage):
-            preview = _preview_message(result, limit=TRUNCATE_RESULT)
-        elif hasattr(result, "content"):
-            preview = _preview_message(result, limit=TRUNCATE_RESULT)
+        result_text = _extract_tool_result_text(result)
+        result_preview = _preview_text(result_text, limit=TRUNCATE_TOOL_RESULT_LOG)
 
-        logger.info(
-            f"{trace_prefix}[tool] done name={tool_name} elapsed_ms={elapsed:.1f} result_preview={preview}"
+        logger.debug(
+            f"{trace_prefix}[tool] done name={tool_name} elapsed_ms={elapsed:.1f} result={result_preview}"
         )
         _write_trace(
             request.runtime,
             "tool_end",
             tool=tool_name,
             elapsed_ms=elapsed,
-            result_preview=preview,
+            result=result_text,
         )
         _push_tool_event(request.runtime, "end", tool_name)
+        if "执行超时" in result_text or "timeout" in result_text.lower():
+            logger.warning(
+                f"{trace_prefix}[tool] timeout name={tool_name} elapsed_ms={elapsed:.1f}"
+            )
+            _write_trace(
+                request.runtime,
+                "tool_timeout",
+                tool=tool_name,
+                elapsed_ms=elapsed,
+                result=result_text,
+            )
 
         if tool_name == "fill_context_for_report":
             request.runtime.context["report"] = True
-            logger.info(
+            logger.debug(
                 f"{trace_prefix}[tool] set report=True by fill_context_for_report"
             )
 
@@ -230,18 +287,17 @@ def log_before_model(state: AgentState, runtime: Runtime):
     )
     if messages:
         last = messages[-1]
-        logger.debug(
-            "%s[model] last message type=%s len=%s preview=%s",
+        logger.info(
+            "%s[model] input last_type=%s input_preview=%s",
             trace_prefix,
             type(last).__name__,
-            len(getattr(last, "content", "") or ""),
-            _preview_message(last, limit=TRUNCATE_PREVIEW),
+            _preview_message(last, limit=TRUNCATE_USER_MODEL_LOG),
         )
     _write_trace(
         runtime,
         "model_prepare",
         messages=len(messages),
-        preview=_message_snapshot(messages),
+        input_messages=_message_snapshot_for_trace(messages),
         report=runtime.context.get("report", False),
     )
     return None
@@ -273,13 +329,15 @@ def log_model_call(
         if tool_name:
             tool_names.append(str(tool_name))
 
+    prompt_preview = _latest_user_message_preview(request.messages or [])
     logger.info(
-        f"{trace_prefix}[model] start name={model_name} messages={len(request.messages)} tools={len(request.tools or [])} report={request.runtime.context.get('report', False)}"
-    )
-    logger.debug(
-        "%s[openai] request params model=%s temperature=%s base_url=%s tools=%s",
+        "%s[model] start name=%s messages=%s tools=%s report=%s prompt_preview=%s params={temperature:%s,base_url:%s,tools:%s}",
         trace_prefix,
         model_name,
+        len(request.messages),
+        len(request.tools or []),
+        request.runtime.context.get("report", False),
+        prompt_preview,
         model_temperature,
         model_base_url,
         tool_names,
@@ -288,9 +346,13 @@ def log_model_call(
         request.runtime,
         "model_start",
         model=model_name,
+        model_params={
+            "temperature": model_temperature,
+            "base_url": model_base_url,
+            "tools": tool_names,
+        },
         messages=len(request.messages),
-        tools=len(request.tools or []),
-        prompt_snapshot=_message_snapshot(request.messages),
+        input_messages=_message_snapshot_for_trace(request.messages),
         report=request.runtime.context.get("report", False),
     )
 
@@ -298,11 +360,13 @@ def log_model_call(
         response = handler(request)
         elapsed = (time.perf_counter() - start) * 1000
         outputs = _result_messages(response)
-        previews = _message_snapshot(outputs)
-        first_preview = previews[0]["preview"] if previews else ""
+        output_preview = _preview_text(
+            "\n".join(_extract_message_content(msg) for msg in outputs),
+            TRUNCATE_USER_MODEL_LOG,
+        )
 
         logger.info(
-            f"{trace_prefix}[model] done name={model_name} elapsed_ms={elapsed:.1f} outputs={len(outputs)} first_preview={first_preview}"
+            f"{trace_prefix}[model] done name={model_name} elapsed_ms={elapsed:.1f} outputs={len(outputs)} output_preview={output_preview}"
         )
         _write_trace(
             request.runtime,
@@ -310,7 +374,7 @@ def log_model_call(
             model=model_name,
             elapsed_ms=elapsed,
             outputs=len(outputs),
-            output_preview=previews,
+            output_messages=_message_snapshot_for_trace(outputs),
         )
         return response
     except Exception as exc:  # pragma: no cover
@@ -333,18 +397,17 @@ def log_after_model(response: ModelResponse, runtime: Runtime):
     """Log the final messages returned by the model (post tool/plan)."""
     trace_prefix = _log_prefix(runtime)
     outputs = _result_messages(response)
-    previews = _message_snapshot(outputs)
     logger.debug(
         "%s[model] after_model outputs=%s preview=%s",
         trace_prefix,
         len(outputs),
-        previews[:2],
+        _message_snapshot_for_logs(outputs)[:2],
     )
     _write_trace(
         runtime,
         "model_after",
         outputs=len(outputs),
-        preview=previews,
+        output_messages=_message_snapshot_for_trace(outputs),
     )
     return response
 

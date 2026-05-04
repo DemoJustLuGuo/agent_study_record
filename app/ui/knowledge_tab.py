@@ -7,6 +7,7 @@ from app.runtime import (
     sync_knowledge,
     upload_knowledge,
 )
+from services.knowledge_service import KnowledgeService
 
 
 def build_knowledge_tab() -> None:
@@ -17,7 +18,7 @@ def build_knowledge_tab() -> None:
                 with gr.Column(scale=3):
                     upload_file = gr.File(
                         label="选择文件",
-                        file_types=[".txt"],
+                        file_types=list(KnowledgeService.allowed_upload_extensions()),
                         type="filepath",
                         container=False,
                     )
@@ -44,7 +45,7 @@ def build_knowledge_tab() -> None:
             fn=upload_knowledge,
             inputs=[upload_file, operator],
             outputs=[upload_result],
-            api_name="knowledge_upload",
+            api_name=False,
         )
 
         with gr.Group():
@@ -71,7 +72,7 @@ def build_knowledge_tab() -> None:
             inputs=[web_urls_input, operator],
             outputs=[web_ingest_result],
             show_progress="full",
-            api_name="knowledge_web_ingest",
+            api_name=False,
         )
 
         gr.HTML('<div class="section-divider"></div>')
@@ -117,6 +118,11 @@ def build_knowledge_tab() -> None:
                             placeholder="必填，如 20260321_120000",
                             show_label=False,
                         )
+                        rollback_confirm = gr.Textbox(
+                            label="确认快照名称",
+                            placeholder="再次输入快照名称以确认回滚",
+                            show_label=False,
+                        )
                         rollback_btn = gr.Button(
                             "⏪ 回滚快照",
                             variant="stop",
@@ -128,17 +134,17 @@ def build_knowledge_tab() -> None:
             fn=sync_knowledge,
             inputs=None,
             outputs=[sync_result],
-            api_name="knowledge_sync",
+            api_name=False,
         )
         snapshot_btn.click(
             fn=create_snapshot,
             inputs=[snapshot_tag],
             outputs=[snapshot_result],
-            api_name="knowledge_snapshot",
+            api_name=False,
         )
         rollback_btn.click(
             fn=rollback_snapshot,
-            inputs=[rollback_name],
+            inputs=[rollback_name, rollback_confirm],
             outputs=[rollback_result],
-            api_name="knowledge_rollback",
+            api_name=False,
         )

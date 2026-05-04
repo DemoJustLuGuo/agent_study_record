@@ -34,7 +34,7 @@ index_manifest_store: chroma_manifest.json
 lifecycle_snapshot_dir: chroma_snapshots
 allowed_knowledge_file_type: ["txt", "pdf", "md", "docx", "html", "htm", "csv"]
 auto_sync_on_init: false
-auto_sync_before_retrieval: true
+auto_sync_before_retrieval: false
 auto_sync_min_interval_seconds: 15
 document_loader:
   loader_priority:
@@ -53,6 +53,13 @@ web_source:
   min_content_chars: 80
   max_content_chars: 50000
   user_agent: "Mozilla/5.0 (compatible; AgentStudyRAG/1.0; +https://example.local)"
+  security:
+    reject_private_ips: true
+    reject_localhost: true
+    allowed_content_types:
+      - "text/html"
+      - "text/plain"
+      - "application/xhtml+xml"
   cleaning:
     enabled: true
     mode: conservative

@@ -120,9 +120,6 @@ class RAGSummarizeService:
         return "\n\n".join(context_blocks)
 
     def answer_with_references(self, query: str) -> dict[str, Any]:
-        if self.vector_store.auto_sync_before_retrieval:
-            self.vector_store.auto_sync_data_dir(trigger="rag_query")
-
         retrieval_conf = chroma_conf.get("retrieval", {})
         rerank_conf = retrieval_conf.get("rerank", {})
         rerank_enabled = bool(rerank_conf.get("enabled", True))

@@ -18,8 +18,13 @@ class KnowledgeBaseService:
     def create_snapshot(self, tag: str = "") -> str:
         return self.vector_store.create_snapshot(tag=tag)
 
-    def rollback_snapshot(self, snapshot_name: str) -> str:
-        return self.vector_store.rollback_snapshot(snapshot_name=snapshot_name)
+    def rollback_snapshot(
+        self, snapshot_name: str, confirm_name: str | None = None
+    ) -> str:
+        return self.vector_store.rollback_snapshot(
+            snapshot_name=snapshot_name,
+            confirm_name=confirm_name,
+        )
 
     def upsert_web_urls(
         self, urls: list[str], operator: str = "admin"

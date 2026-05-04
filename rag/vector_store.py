@@ -3,214 +3,26 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import threading
 import time
 from datetime import datetime
-from html.parser import HTMLParser
-from urllib.error import URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from model.factory import embeddings_model
+from rag.ingest.web_loader import fetch_web_text, normalize_web_url
+from rag.stores.snapshot_store import create_snapshot_files, restore_snapshot_files
 from utils.config_handler import chroma_conf
 from utils.file_handler import get_file_md5_hex, load_documents_by_path
 from utils.log import logger
 from utils.path_tools import get_abs_path
 
 
-class _HTMLTextExtractor(HTMLParser):
-    _BLOCK_TAGS = {
-        "p",
-        "div",
-        "br",
-        "li",
-        "tr",
-        "td",
-        "th",
-        "section",
-        "article",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "blockquote",
-        "pre",
-    }
-    _SKIP_TAGS = {"script", "style", "noscript", "svg"}
-    _CONSERVATIVE_NOISE_TAGS = {
-        "aside",
-        "footer",
-        "nav",
-        "form",
-        "button",
-        "iframe",
-        "canvas",
-        "dialog",
-    }
-    _CONSERVATIVE_NOISE_ROLES = {
-        "navigation",
-        "contentinfo",
-        "complementary",
-        "banner",
-        "dialog",
-    }
-    _DEFAULT_NOISE_KEYWORDS = [
-        "ad",
-        "ads",
-        "advert",
-        "banner",
-        "popup",
-        "modal",
-        "cookie",
-        "consent",
-        "sidebar",
-        "footer",
-        "toolbar",
-        "recommend",
-        "related",
-        "comment",
-        "social",
-        "share",
-        "sponsor",
-        "widget",
-    ]
-
-    def __init__(self, cleaning_conf: dict[str, object] | None = None):
-        super().__init__()
-        self._parts: list[str] = []
-        self._skip_tag_stack: list[str] = []
-        self._noise_block_hits = 0
-        self._dropped_short_lines = 0
-        conf = cleaning_conf or {}
-        self._cleaning_enabled = bool(conf.get("enabled", True))
-        self._cleaning_mode = str(conf.get("mode", "conservative")).strip().lower()
-        self._drop_short_line_length = int(conf.get("drop_short_line_length", 0))
-        configured_keywords = conf.get("noise_keywords", [])
-        if isinstance(configured_keywords, list) and configured_keywords:
-            self._noise_keywords = [
-                str(item).strip().lower()
-                for item in configured_keywords
-                if str(item).strip()
-            ]
-        else:
-            self._noise_keywords = list(self._DEFAULT_NOISE_KEYWORDS)
-
-    def _normalize_attrs(self, attrs: list[tuple[str, str | None]]) -> dict[str, str]:
-        normalized: dict[str, str] = {}
-        for key, value in attrs:
-            normalized[str(key or "").strip().lower()] = (
-                str(value or "").strip().lower()
-            )
-        return normalized
-
-    def _contains_noise_keyword(self, text: str) -> bool:
-        if not text:
-            return False
-        tokens = [
-            token for token in re.split(r"[^a-z0-9]+", text.lower()) if token.strip()
-        ]
-        if not tokens:
-            return False
-        token_set = set(tokens)
-        for keyword in self._noise_keywords:
-            if len(keyword) <= 2:
-                if keyword in token_set:
-                    return True
-                continue
-            if keyword in token_set or any(
-                token.startswith(keyword) for token in tokens
-            ):
-                return True
-        return False
-
-    def _is_noise_container(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> bool:
-        if tag in self._SKIP_TAGS:
-            return True
-        if not self._cleaning_enabled:
-            return False
-        if (
-            self._cleaning_mode == "conservative"
-            and tag in self._CONSERVATIVE_NOISE_TAGS
-        ):
-            return True
-
-        attr_map = self._normalize_attrs(attrs)
-        class_or_id = " ".join(
-            [
-                attr_map.get("class", ""),
-                attr_map.get("id", ""),
-                attr_map.get("role", ""),
-                attr_map.get("aria-label", ""),
-                attr_map.get("data-testid", ""),
-            ]
-        )
-        role_value = attr_map.get("role", "")
-        if (
-            self._cleaning_mode == "conservative"
-            and role_value in self._CONSERVATIVE_NOISE_ROLES
-        ):
-            return True
-        return self._contains_noise_keyword(class_or_id)
-
-    def handle_starttag(self, tag, attrs):
-        if self._is_noise_container(tag, attrs):
-            self._skip_tag_stack.append(tag)
-            if tag not in self._SKIP_TAGS:
-                self._noise_block_hits += 1
-            return
-        if tag in self._BLOCK_TAGS:
-            self._parts.append("\n")
-
-    def handle_endtag(self, tag):
-        if self._skip_tag_stack and tag == self._skip_tag_stack[-1]:
-            self._skip_tag_stack.pop()
-            return
-        if tag in self._BLOCK_TAGS:
-            self._parts.append("\n")
-
-    def handle_data(self, data):
-        if self._skip_tag_stack:
-            return
-        text = (data or "").strip()
-        if text:
-            self._parts.append(text)
-
-    def get_text(self) -> str:
-        raw = " ".join(self._parts)
-        lines = [" ".join(line.split()) for line in raw.splitlines()]
-        filtered_lines: list[str] = []
-        for line in lines:
-            if not line:
-                continue
-            if (
-                self._drop_short_line_length > 0
-                and len(line) < self._drop_short_line_length
-            ):
-                self._dropped_short_lines += 1
-                continue
-            filtered_lines.append(line)
-        return "\n".join(filtered_lines).strip()
-
-    def get_cleaning_stats(self, raw_chars: int) -> dict[str, object]:
-        return {
-            "cleaning_mode": self._cleaning_mode,
-            "noise_block_hits": self._noise_block_hits,
-            "dropped_short_lines": self._dropped_short_lines,
-            "raw_chars": int(raw_chars),
-        }
-
-
 class VectorStoreService:
     _auto_sync_lock = threading.Lock()
+    _lifecycle_write_lock = threading.RLock()
     _last_auto_sync_ts = 0.0
 
     def __init__(self, enable_auto_sync: bool = True):
@@ -335,97 +147,59 @@ class VectorStoreService:
         return os.path.normpath(os.path.abspath(source_path))
 
     def sync_removed_sources(self) -> dict[str, object]:
-        manifest = self._load_manifest()
-        removed_sources = self._drop_removed_file_sources(manifest)
-        self._save_manifest(manifest)
-        self._sync_md5_store_with_manifest(manifest)
-        return {
-            "removed_source_count": len(removed_sources),
-            "removed_sources": removed_sources,
-        }
+        with self.__class__._lifecycle_write_lock:
+            manifest = self._load_manifest()
+            removed_sources = self._drop_removed_file_sources(manifest)
+            self._save_manifest(manifest)
+            self._sync_md5_store_with_manifest(manifest)
+            return {
+                "removed_source_count": len(removed_sources),
+                "removed_sources": removed_sources,
+            }
 
     def create_snapshot(self, tag: str = "") -> str:
-        snapshot_root = self._snapshot_root_path()
-        os.makedirs(snapshot_root, exist_ok=True)
+        with self.__class__._lifecycle_write_lock:
+            snapshot_name = create_snapshot_files(
+                snapshot_root=self._snapshot_root_path(),
+                persist_directory=self.persist_directory,
+                md5_store_path=self._md5_store_path(),
+                manifest_store_path=self._manifest_store_path(),
+                tag=tag,
+            )
+            logger.info(f"向量生命周期快照创建成功: {snapshot_name}")
+            return snapshot_name
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_tag = "".join(c for c in tag.strip() if c.isalnum() or c in ("-", "_"))
-        snapshot_name = f"{timestamp}_{safe_tag}" if safe_tag else timestamp
-        snapshot_path = os.path.join(snapshot_root, snapshot_name)
-        os.makedirs(snapshot_path, exist_ok=False)
+    def rollback_snapshot(
+        self, snapshot_name: str, confirm_name: str | None = None
+    ) -> str:
+        name = (snapshot_name or "").strip()
+        if not name:
+            raise ValueError("快照名称不能为空")
+        if (confirm_name or "").strip() != name:
+            raise ValueError("回滚确认失败：confirm_name 必须与 snapshot_name 完全一致")
 
-        snapshot_vector_path = os.path.join(snapshot_path, "vector_store")
-        if os.path.exists(self.persist_directory):
-            shutil.copytree(self.persist_directory, snapshot_vector_path)
-        else:
-            os.makedirs(snapshot_vector_path, exist_ok=True)
+        with self.__class__._lifecycle_write_lock:
+            pre_snapshot = self.create_snapshot(tag=f"pre_rollback_{name}")
+            restored_name = restore_snapshot_files(
+                snapshot_root=self._snapshot_root_path(),
+                persist_directory=self.persist_directory,
+                md5_store_path=self._md5_store_path(),
+                manifest_store_path=self._manifest_store_path(),
+                snapshot_name=name,
+            )
 
-        md5_store_path = self._md5_store_path()
-        snapshot_md5_path = os.path.join(
-            snapshot_path, os.path.basename(md5_store_path)
-        )
-        if os.path.exists(md5_store_path):
-            shutil.copy2(md5_store_path, snapshot_md5_path)
-        else:
-            open(snapshot_md5_path, "w", encoding="utf-8").close()
+            self.vector_store = Chroma(
+                collection_name=chroma_conf["collection_name"],
+                embedding_function=embeddings_model,
+                persist_directory=self.persist_directory,
+            )
 
-        manifest_store_path = self._manifest_store_path()
-        snapshot_manifest_path = os.path.join(
-            snapshot_path, os.path.basename(manifest_store_path)
-        )
-        if os.path.exists(manifest_store_path):
-            shutil.copy2(manifest_store_path, snapshot_manifest_path)
-        else:
-            with open(snapshot_manifest_path, "w", encoding="utf-8") as file_obj:
-                json.dump({}, file_obj, ensure_ascii=False, indent=2)
-
-        logger.info(f"向量生命周期快照创建成功: {snapshot_name}")
-        return snapshot_name
-
-    def rollback_snapshot(self, snapshot_name: str) -> str:
-        snapshot_path = os.path.join(self._snapshot_root_path(), snapshot_name)
-        if not os.path.isdir(snapshot_path):
-            raise FileNotFoundError(f"快照不存在: {snapshot_name}")
-
-        snapshot_vector_path = os.path.join(snapshot_path, "vector_store")
-        if not os.path.isdir(snapshot_vector_path):
-            raise FileNotFoundError(f"快照向量目录不存在: {snapshot_vector_path}")
-
-        if os.path.exists(self.persist_directory):
-            shutil.rmtree(self.persist_directory)
-        shutil.copytree(snapshot_vector_path, self.persist_directory)
-
-        md5_store_path = self._md5_store_path()
-        manifest_store_path = self._manifest_store_path()
-        snapshot_md5_path = os.path.join(
-            snapshot_path, os.path.basename(md5_store_path)
-        )
-        snapshot_manifest_path = os.path.join(
-            snapshot_path, os.path.basename(manifest_store_path)
-        )
-
-        self._ensure_parent_dir(md5_store_path)
-        self._ensure_parent_dir(manifest_store_path)
-
-        if os.path.exists(snapshot_md5_path):
-            shutil.copy2(snapshot_md5_path, md5_store_path)
-        else:
-            open(md5_store_path, "w", encoding="utf-8").close()
-
-        if os.path.exists(snapshot_manifest_path):
-            shutil.copy2(snapshot_manifest_path, manifest_store_path)
-        else:
-            with open(manifest_store_path, "w", encoding="utf-8") as file_obj:
-                json.dump({}, file_obj, ensure_ascii=False, indent=2)
-
-        self.vector_store = Chroma(
-            collection_name=chroma_conf["collection_name"],
-            embedding_function=embeddings_model,
-            persist_directory=self.persist_directory,
-        )
-
-        logger.info(f"已回滚到向量生命周期快照: {snapshot_name}")
-        return snapshot_name
+            logger.info(
+                "已回滚到向量生命周期快照: %s pre_snapshot=%s",
+                restored_name,
+                pre_snapshot,
+            )
+            return restored_name
 
     def _check_md5_hex(self, md5_for_check: str) -> bool:
         return md5_for_check in self._load_md5_store()
@@ -505,13 +279,7 @@ class VectorStoreService:
 
     @staticmethod
     def _normalize_web_url(url: str) -> str:
-        text = (url or "").strip()
-        if not text:
-            return ""
-        parsed = urlparse(text)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            return ""
-        return parsed.geturl()
+        return normalize_web_url(url)
 
     @staticmethod
     def _fetch_web_text(
@@ -520,37 +288,16 @@ class VectorStoreService:
         user_agent: str,
         max_content_chars: int,
         cleaning_conf: dict[str, object] | None = None,
+        security_conf: dict[str, object] | None = None,
     ) -> tuple[str, dict[str, object]]:
-        request = Request(url, headers={"User-Agent": user_agent})
-        try:
-            with urlopen(request, timeout=timeout_seconds) as response:
-                raw = response.read(max(max_content_chars * 2, 4096))
-                charset = response.headers.get_content_charset() or "utf-8"
-                text = raw.decode(charset, errors="replace")
-                content_type = str(response.headers.get("Content-Type", "")).lower()
-        except URLError as error:
-            raise RuntimeError(f"网络请求失败: {error}") from error
-
-        if "html" in content_type or "<html" in text.lower():
-            parser = _HTMLTextExtractor(cleaning_conf=cleaning_conf)
-            parser.feed(text)
-            parsed_text = parser.get_text()
-            stats = parser.get_cleaning_stats(raw_chars=len(text))
-        else:
-            parsed_text = "\n".join(
-                line.strip() for line in text.splitlines() if line.strip()
-            )
-            stats = {
-                "cleaning_mode": "plain_text",
-                "noise_block_hits": 0,
-                "dropped_short_lines": 0,
-                "raw_chars": len(text),
-            }
-
-        if len(parsed_text) > max_content_chars:
-            parsed_text = parsed_text[:max_content_chars]
-        stats["cleaned_chars"] = len(parsed_text)
-        return parsed_text, stats
+        return fetch_web_text(
+            url=url,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+            max_content_chars=max_content_chars,
+            cleaning_conf=cleaning_conf,
+            security_conf=security_conf,
+        )
 
     @staticmethod
     def _tokenize_for_keyword(text: str) -> list[str]:
@@ -699,8 +446,6 @@ class VectorStoreService:
         }
 
     def get_retriever(self):
-        if self.enable_auto_sync and self.auto_sync_before_retrieval:
-            self.auto_sync_data_dir(trigger="get_retriever")
         retrieval_conf = chroma_conf.get("retrieval", {})
         top_k = int(retrieval_conf.get("final_k", chroma_conf.get("k", 3)))
         return self.vector_store.as_retriever(search_kwargs={"k": top_k})
@@ -769,6 +514,16 @@ class VectorStoreService:
             return result
 
     def upload_text(self, data: str, filename: str, operator: str = "admin") -> str:
+        with self.__class__._lifecycle_write_lock:
+            return self._upload_text_unlocked(
+                data=data,
+                filename=filename,
+                operator=operator,
+            )
+
+    def _upload_text_unlocked(
+        self, data: str, filename: str, operator: str = "admin"
+    ) -> str:
         text = (data or "").strip()
         if not text:
             return "【失败】文本内容为空"
@@ -818,8 +573,15 @@ class VectorStoreService:
     def upsert_web_urls(
         self, urls: list[str], operator: str = "admin"
     ) -> dict[str, object]:
+        with self.__class__._lifecycle_write_lock:
+            return self._upsert_web_urls_unlocked(urls=urls, operator=operator)
+
+    def _upsert_web_urls_unlocked(
+        self, urls: list[str], operator: str = "admin"
+    ) -> dict[str, object]:
         web_conf = chroma_conf.get("web_source", {})
         cleaning_conf = web_conf.get("cleaning", {})
+        security_conf = web_conf.get("security", {})
         timeout_seconds = float(web_conf.get("timeout_seconds", 20))
         min_content_chars = int(web_conf.get("min_content_chars", 80))
         max_content_chars = int(web_conf.get("max_content_chars", 50000))
@@ -864,6 +626,9 @@ class VectorStoreService:
                     cleaning_conf=(
                         cleaning_conf if isinstance(cleaning_conf, dict) else {}
                     ),
+                    security_conf=(
+                        security_conf if isinstance(security_conf, dict) else {}
+                    ),
                 )
             except Exception as error:
                 failed += 1
@@ -896,6 +661,9 @@ class VectorStoreService:
                             user_agent=user_agent,
                             max_content_chars=max_content_chars,
                             cleaning_conf=fallback_conf,
+                            security_conf=(
+                                security_conf if isinstance(security_conf, dict) else {}
+                            ),
                         )
                         if len(fallback_text) >= min_content_chars:
                             text_content = fallback_text
@@ -1031,6 +799,10 @@ class VectorStoreService:
         }
 
     def load_documents(self):
+        with self.__class__._lifecycle_write_lock:
+            return self._load_documents_unlocked()
+
+    def _load_documents_unlocked(self):
         manifest = self._load_manifest()
         allowed_files_path = self._list_knowledge_files()
 
@@ -1142,6 +914,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     rollback_parser = sub_parser.add_parser("rollback", help="回滚到指定快照")
     rollback_parser.add_argument("snapshot", help="快照目录名")
+    rollback_parser.add_argument(
+        "--confirm-name",
+        default="",
+        help="回滚确认名，必须与快照目录名完全一致",
+    )
     return parser
 
 
@@ -1159,5 +936,8 @@ if __name__ == "__main__":
         snapshot_name = vector_store_service.create_snapshot(args.tag)
         print(f"snapshot created: {snapshot_name}")
     elif args.command == "rollback":
-        snapshot_name = vector_store_service.rollback_snapshot(args.snapshot)
+        snapshot_name = vector_store_service.rollback_snapshot(
+            args.snapshot,
+            confirm_name=args.confirm_name,
+        )
         print(f"snapshot restored: {snapshot_name}")

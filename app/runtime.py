@@ -1,16 +1,23 @@
-import os
 import re
 import time
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
-import yaml
 from langchain_openai import ChatOpenAI
 import gradio as gr
 
 from app.chat_threads import ChatThreadStore, THREAD_TITLE_MAX_LEN
-from rag.metrics import get_rag_metrics_markdown, record_rag_metric, reset_rag_metrics
+from rag.metrics import get_rag_metrics_markdown, reset_rag_metrics
+from services.knowledge_service import KnowledgeService
+from services.rag_query_service import RagQueryService
+from services.settings_service import (
+    load_connection_defaults as service_load_connection_defaults,
+    read_agent_config,
+    resolve_secret,
+    save_connection_settings as service_save_connection_settings,
+    write_agent_config,
+)
 from utils.config_handler import memory_conf
 from utils.path_tools import get_abs_path
 from utils.log import logger
@@ -31,8 +38,11 @@ knowledge_base_service: "KnowledgeBaseService | None" = None
 knowledge_base_lock = Lock()
 rag_service: "RAGSummarizeService | None" = None
 rag_service_lock = Lock()
+knowledge_service: KnowledgeService | None = None
+knowledge_service_lock = Lock()
+rag_query_service: RagQueryService | None = None
+rag_query_service_lock = Lock()
 agent_config_lock = Lock()
-AGENT_CONFIG_PATH = get_abs_path("model/config/agent.yml")
 
 THINKING_HTML = (
     '<div class="thinking-indicator">'
@@ -48,20 +58,11 @@ def _looks_like_env_var(value: str) -> bool:
 
 
 def _read_agent_config() -> dict[str, Any]:
-    try:
-        with open(AGENT_CONFIG_PATH, "r", encoding="utf-8") as file_obj:
-            data = yaml.safe_load(file_obj) or {}
-            return data if isinstance(data, dict) else {}
-    except FileNotFoundError:
-        return {}
+    return read_agent_config()
 
 
 def _write_agent_config(config_data: dict[str, Any]) -> None:
-    config_dir = os.path.dirname(AGENT_CONFIG_PATH)
-    if config_dir:
-        os.makedirs(config_dir, exist_ok=True)
-    with open(AGENT_CONFIG_PATH, "w", encoding="utf-8") as file_obj:
-        yaml.safe_dump(config_data, file_obj, allow_unicode=True, sort_keys=False)
+    write_agent_config(config_data)
 
 
 def _mask_secret(secret: str) -> str:
@@ -74,48 +75,12 @@ def _mask_secret(secret: str) -> str:
 
 
 def load_connection_defaults() -> tuple[str, str, str]:
-    config_data = _read_agent_config()
-    base_url = str(config_data.get("openai_base_url", "")).strip()
-    key_value = str(config_data.get("OPENAI_API_KEY", "")).strip()
-
-    if _looks_like_env_var(key_value):
-        status = (
-            "当前 `OPENAI_API_KEY` 配置为环境变量名，"
-            "请在下方填写真实密钥后自动写入 `model/config/agent.yml`。"
-        )
-        return base_url, "", status
-
-    if key_value:
-        status = (
-            f"已读取现有配置：API 地址 `{base_url}`，"
-            f"API Key `{_mask_secret(key_value)}`。"
-        )
-    else:
-        status = "尚未配置 OpenAI API 地址与密钥。"
-    return base_url, key_value, status
+    return service_load_connection_defaults()
 
 
 def save_connection_settings(openai_base_url: str, openai_api_key: str) -> str:
-    base_url = (openai_base_url or "").strip()
-    api_key = (openai_api_key or "").strip()
-
-    if not base_url:
-        return "⚠️ API 地址为空，未保存。"
-    if not api_key:
-        return "⚠️ API 密钥为空，未保存。"
-
     with agent_config_lock:
-        config_data = _read_agent_config()
-        config_data["openai_base_url"] = base_url
-        config_data["OPENAI_API_KEY"] = api_key
-        _write_agent_config(config_data)
-
-    os.environ["OPENAI_API_KEY"] = api_key
-    os.environ["SILICONFLOW_API_KEY"] = api_key
-    return (
-        f"✅ 已自动保存到 `model/config/agent.yml`："
-        f"API 地址 `{base_url}`，API Key `{_mask_secret(api_key)}`。"
-    )
+        return service_save_connection_settings(openai_base_url, openai_api_key)
 
 
 def normalize_markdown_layout(text: str) -> str:
@@ -192,6 +157,22 @@ def get_rag_service() -> "RAGSummarizeService":
 
             rag_service = RAGSummarizeService()
         return rag_service
+
+
+def get_knowledge_service() -> KnowledgeService:
+    global knowledge_service
+    with knowledge_service_lock:
+        if knowledge_service is None:
+            knowledge_service = KnowledgeService(get_knowledge_base_service())
+        return knowledge_service
+
+
+def get_rag_query_service() -> RagQueryService:
+    global rag_query_service
+    with rag_query_service_lock:
+        if rag_query_service is None:
+            rag_query_service = RagQueryService(get_rag_service())
+        return rag_query_service
 
 
 def _mask_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -307,15 +288,7 @@ def _web_ingest_result_to_markdown(result: dict[str, Any]) -> str:
 
 
 def _resolve_secret(value: str) -> str:
-    text = (value or "").strip()
-    if not text:
-        return ""
-    env_value = (os.environ.get(text) or "").strip()
-    if env_value:
-        return env_value
-    if _looks_like_env_var(text):
-        return ""
-    return text
+    return resolve_secret(value)
 
 
 def _build_title_model() -> ChatOpenAI:
@@ -592,28 +565,9 @@ def stream_thread_reply(
 
 
 def rag_query(prompt: str):
-    query = (prompt or "").strip()
-    if not query:
-        return "请输入问题。", ""
-
-    try:
-        logger.info("[rag] query start len=%s", len(query))
-        result = get_rag_service().answer_with_references(query)
-    except Exception:
-        logger.exception("[rag] query failed")
-        record_rag_metric(
-            {
-                "ok": False,
-                "strategy": "error",
-                "reference_count": 0,
-                "candidate_count": 0,
-                "retrieval_ms": 0,
-                "rerank_ms": 0,
-                "llm_ms": 0,
-                "total_ms": 0,
-            }
-        )
-        return "⚠️ 系统错误：RAG 查询失败，请稍后重试。", ""
+    result = get_rag_query_service().answer_with_references(prompt)
+    if result.get("error"):
+        return str(result.get("error")), ""
 
     answer = _answer_to_markdown(
         result.get("answer", ""),
@@ -622,20 +576,6 @@ def rag_query(prompt: str):
     answer += _retrieval_debug_to_markdown(result.get("retrieval_debug", {}))
     references = _render_references(result.get("references", []))
     refs_md = _references_to_markdown(references)
-    metrics = result.get("metrics", {})
-    record_rag_metric(
-        {
-            "ok": True,
-            "strategy": metrics.get("strategy", "unknown"),
-            "reference_count": metrics.get("reference_count", len(references)),
-            "candidate_count": metrics.get("candidate_count", 0),
-            "retrieval_ms": metrics.get("retrieval_ms", 0),
-            "rerank_ms": metrics.get("rerank_ms", 0),
-            "llm_ms": metrics.get("llm_ms", 0),
-            "total_ms": metrics.get("total_ms", 0),
-        }
-    )
-    logger.info("[rag] query done refs=%s", len(references))
     return answer, refs_md
 
 
@@ -649,81 +589,23 @@ def reset_rag_metrics_panel() -> str:
 
 
 def ingest_web_urls(urls_text: str, operator: str):
-    urls = _parse_web_urls(urls_text)
-    if not urls:
-        return "请先输入至少一个 HTTP/HTTPS 链接。"
-
-    user = (operator or "gradio").strip() or "gradio"
-    try:
-        logger.info("[rag] web ingest start urls=%s operator=%s", len(urls), user)
-        result = get_knowledge_base_service().upsert_web_urls(urls=urls, operator=user)
-        logger.info(
-            "[rag] web ingest done total=%s added=%s updated=%s skipped=%s failed=%s",
-            result.get("total", 0),
-            result.get("added", 0),
-            result.get("updated", 0),
-            result.get("skipped", 0),
-            result.get("failed", 0),
-        )
-    except Exception:
-        logger.exception("[rag] web ingest failed")
-        return "⚠️ 系统错误：网页抓取/入库失败。"
+    result = get_knowledge_service().ingest_web_urls(urls_text, operator)
+    if result.get("error"):
+        return str(result.get("error"))
     return _web_ingest_result_to_markdown(result)
 
 
 def upload_knowledge(file_path: str, operator: str):
-    if not file_path:
-        return "请先上传 .txt 文件。"
-
-    source = Path(file_path)
-    if source.suffix.lower() != ".txt":
-        return "仅支持 .txt 文件。"
-
-    try:
-        text = source.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return "文件编码错误：请使用 UTF-8 编码。"
-    except Exception:
-        return "系统错误：读取上传文件失败。"
-
-    if not text.strip():
-        return "文件内容为空。"
-
-    user = (operator or "gradio").strip() or "gradio"
-    try:
-        result = get_knowledge_base_service().upload_by_str(
-            text, source.name, operator=user
-        )
-    except Exception:
-        return "系统错误：知识写入失败。"
-
-    return f"✅ {result}"
+    return get_knowledge_service().upload_file(file_path, operator=operator)
 
 
 def sync_knowledge():
-    try:
-        return get_knowledge_base_service().sync_removed_sources()
-    except Exception:
-        return {"error": "系统错误：同步失败。"}
+    return get_knowledge_service().sync_removed_sources()
 
 
 def create_snapshot(tag: str):
-    try:
-        name = get_knowledge_base_service().create_snapshot(tag=(tag or "").strip())
-    except Exception:
-        return {"error": "系统错误：快照创建失败。"}
-    return {"snapshot": name}
+    return get_knowledge_service().create_snapshot(tag)
 
 
-def rollback_snapshot(snapshot_name: str):
-    name = (snapshot_name or "").strip()
-    if not name:
-        return {"error": "请填写快照名称。"}
-
-    try:
-        restored = get_knowledge_base_service().rollback_snapshot(name)
-    except FileNotFoundError:
-        return {"error": "快照不存在。"}
-    except Exception:
-        return {"error": "系统错误：回滚失败。"}
-    return {"snapshot": restored, "result": "ok"}
+def rollback_snapshot(snapshot_name: str, confirm_name: str):
+    return get_knowledge_service().rollback_snapshot(snapshot_name, confirm_name)

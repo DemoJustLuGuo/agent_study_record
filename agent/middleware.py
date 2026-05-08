@@ -30,7 +30,7 @@ TRUNCATE_TOOL_ARGS_LOG = 800
 TRUNCATE_TOOL_RESULT_LOG = 1200
 TRACE_DIR = os.path.join(LOG_ROOT, "traces")
 os.makedirs(TRACE_DIR, exist_ok=True)
-_TOOL_EVENTS: dict[str, list[dict[str, str]]] = {}
+_TOOL_EVENTS: dict[str, list[dict[str, Any]]] = {}
 _TOOL_EVENTS_LOCK = Lock()
 
 
@@ -130,6 +130,19 @@ def _extract_python_or_matlab_code(tool_name: str, args_payload: Any) -> str:
     return str(args_payload or "")
 
 
+def sanitize_tool_args_preview(tool_name: str, args_payload: Any) -> str:
+    if isinstance(args_payload, dict):
+        safe_payload = dict(args_payload)
+        if tool_name in ("python", "matlab") and "code" in safe_payload:
+            code_text = str(safe_payload.get("code") or "")
+            safe_payload["code"] = f"<redacted code,len={len(code_text)}>"
+        return _preview_text(str(safe_payload), limit=TRUNCATE_TOOL_ARGS_LOG)
+    if tool_name in ("python", "matlab"):
+        text = str(args_payload or "")
+        return f"<redacted code,len={len(text)}>"
+    return _preview_text(str(args_payload), limit=TRUNCATE_TOOL_ARGS_LOG)
+
+
 def _latest_user_message_preview(messages: list[Any]) -> str:
     for msg in reversed(messages):
         role = str(getattr(msg, "type", getattr(msg, "role", ""))).lower()
@@ -158,19 +171,21 @@ def _write_trace(runtime: Runtime | None, event: str, **payload: Any) -> None:
         logger.debug(f"{_log_prefix(runtime)}trace file write failed: {exc}")
 
 
-def _push_tool_event(runtime: Runtime | None, phase: str, tool: str) -> None:
+def _push_tool_event(
+    runtime: Runtime | None, phase: str, tool: str, **payload: Any
+) -> None:
     trace_id = _trace_id(runtime)
     if not trace_id:
         return
 
     with _TOOL_EVENTS_LOCK:
         queue = _TOOL_EVENTS.setdefault(trace_id, [])
-        queue.append({"phase": phase, "tool": tool})
+        queue.append({"phase": phase, "tool": tool, **payload})
         if len(queue) > 100:
             del queue[:-100]
 
 
-def pop_tool_events(trace_id: str) -> list[dict[str, str]]:
+def pop_tool_events(trace_id: str) -> list[dict[str, Any]]:
     if not trace_id:
         return []
 
@@ -203,7 +218,7 @@ def monitor_tool(
     tool_name = request.tool_call["name"]
     args_payload = request.tool_call.get("args")
     args_text = str(args_payload)
-    args_preview = _preview_text(args_text, limit=TRUNCATE_TOOL_ARGS_LOG)
+    args_preview = sanitize_tool_args_preview(tool_name, args_payload)
     code_text = _extract_python_or_matlab_code(tool_name, args_payload)
     code_preview = _preview_text(code_text, limit=TRUNCATE_TOOL_ARGS_LOG)
     trace_prefix = _log_prefix(request.runtime)
@@ -212,7 +227,7 @@ def monitor_tool(
         f"{trace_prefix}[tool] start name={tool_name} args={args_preview}"
         + (f" code_preview={code_preview}" if code_text else "")
     )
-    _push_tool_event(request.runtime, "start", tool_name)
+    _push_tool_event(request.runtime, "start", tool_name, args_preview=args_preview)
     _write_trace(
         request.runtime,
         "tool_start",
@@ -238,7 +253,13 @@ def monitor_tool(
             elapsed_ms=elapsed,
             result=result_text,
         )
-        _push_tool_event(request.runtime, "end", tool_name)
+        _push_tool_event(
+            request.runtime,
+            "end",
+            tool_name,
+            elapsed_ms=elapsed,
+            result_preview=result_preview,
+        )
         if "执行超时" in result_text or "timeout" in result_text.lower():
             logger.warning(
                 f"{trace_prefix}[tool] timeout name={tool_name} elapsed_ms={elapsed:.1f}"
@@ -270,7 +291,13 @@ def monitor_tool(
             elapsed_ms=elapsed,
             error=str(exc),
         )
-        _push_tool_event(request.runtime, "error", tool_name)
+        _push_tool_event(
+            request.runtime,
+            "error",
+            tool_name,
+            elapsed_ms=elapsed,
+            error_preview=_preview_text(str(exc), limit=TRUNCATE_TOOL_RESULT_LOG),
+        )
         raise
 
 

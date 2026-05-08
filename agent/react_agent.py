@@ -11,6 +11,7 @@ from typing import Any
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
+from agent.events import AgentEvent
 from agent.middleware import (
     clear_tool_events,
     log_after_model,
@@ -379,7 +380,24 @@ class ReactAgent:
         return "结论：已完成工具计算，但暂时无法自动整理结论，请展开思考过程查看明细。"
 
     # ---------- streaming entry ----------
-    def execute_stream(self, query: str):
+    @staticmethod
+    def _preview_event_text(text: str, limit: int = 800) -> str:
+        normalized = (text or "").replace("\n", " ")
+        if len(normalized) > limit:
+            return normalized[:limit] + f"...(truncated,len={len(normalized)})"
+        return normalized
+
+    @staticmethod
+    def _agent_event_text(event: AgentEvent) -> str:
+        event_type = event.type
+        data = event.data
+        if event_type in ("token", "status", "tool"):
+            return str(data.get("text") or "")
+        if event_type == "error":
+            return str(data.get("text") or data.get("message") or "")
+        return ""
+
+    def execute_events(self, query: str):
         trace_id = uuid.uuid4().hex[:8]
         logger.info(
             "[react_agent][%s] received query thread=%s", trace_id, self.thread_id
@@ -397,8 +415,8 @@ class ReactAgent:
         stream_chunk_count = 0
         stream_text_size = 0
 
-        def _drain_tool_events() -> list[str]:
-            messages_out: list[str] = []
+        def _drain_tool_events() -> list[AgentEvent]:
+            events_out: list[AgentEvent] = []
             for event in pop_tool_events(trace_id):
                 phase = str(event.get("phase", "")).strip()
                 tool_name = str(event.get("tool", "")).strip()
@@ -416,8 +434,21 @@ class ReactAgent:
 
                 if msg not in emitted_status:
                     emitted_status.add(msg)
-                    messages_out.append(msg + "\n")
-            return messages_out
+                    events_out.append(
+                        AgentEvent(
+                            "tool",
+                            {
+                                "phase": phase,
+                                "tool": tool_name,
+                                "text": msg + "\n",
+                                "args_preview": event.get("args_preview", ""),
+                                "elapsed_ms": event.get("elapsed_ms"),
+                                "result_preview": event.get("result_preview", ""),
+                                "error_preview": event.get("error_preview", ""),
+                            },
+                        )
+                    )
+            return events_out
 
         # 1) 路由提示
         strategy = self._route_strategy(query)
@@ -479,7 +510,7 @@ class ReactAgent:
                         logger.debug(
                             f"[react_agent][{trace_id}] tool done: {tool_name}"
                         )
-                        yield think_msg + "\n"
+                        yield AgentEvent("status", {"text": think_msg + "\n"})
                     continue
 
                 # AIMessageChunk：逐 token 内容 或 工具调用
@@ -504,7 +535,7 @@ class ReactAgent:
                                 logger.debug(
                                     f"[react_agent][{trace_id}] tool call: {tool_names}"
                                 )
-                                yield think_msg + "\n"
+                                yield AgentEvent("status", {"text": think_msg + "\n"})
 
                     # 提取逐 token 的内容
                     token_content = getattr(message_chunk, "content", None) or ""
@@ -519,7 +550,7 @@ class ReactAgent:
                                 stream_chunk_count,
                                 stream_text_size,
                             )
-                        yield token_content
+                        yield AgentEvent("token", {"text": token_content})
 
                     # 兜底：检查 tool_calls（非流式工具调用格式）
                     tool_calls = getattr(message_chunk, "tool_calls", None)
@@ -527,7 +558,7 @@ class ReactAgent:
                         think_msg = self._tool_call_summary(tool_calls)
                         if think_msg not in emitted_status:
                             emitted_status.add(think_msg)
-                            yield think_msg + "\n"
+                            yield AgentEvent("status", {"text": think_msg + "\n"})
 
                     # Minimax 风格：检查 reasoning_content 中的内联工具调用
                     if not token_content and not tool_call_chunks and not tool_calls:
@@ -547,7 +578,17 @@ class ReactAgent:
                                     logger.debug(
                                         f"[react_agent][{trace_id}] inline tool: {tool_name}"
                                     )
-                                    yield tool_start_msg + "\n"
+                                    yield AgentEvent(
+                                        "tool",
+                                        {
+                                            "phase": "start",
+                                            "tool": tool_name,
+                                            "text": tool_start_msg + "\n",
+                                            "args_preview": self._preview_event_text(
+                                                str(params or {})
+                                            ),
+                                        },
+                                    )
 
                                 try:
                                     tool_func = self.tools_map[tool_name]
@@ -571,7 +612,17 @@ class ReactAgent:
                                         logger.debug(
                                             f"[react_agent][{trace_id}] chunk len={len(tool_done_msg)}"
                                         )
-                                        yield tool_done_msg + "\n"
+                                        yield AgentEvent(
+                                            "tool",
+                                            {
+                                                "phase": "end",
+                                                "tool": tool_name,
+                                                "text": tool_done_msg + "\n",
+                                                "result_preview": self._preview_event_text(
+                                                    str(result)
+                                                ),
+                                            },
+                                        )
 
                                     final_text = self._summarize_inline_tool_result(
                                         query=query,
@@ -584,7 +635,12 @@ class ReactAgent:
                                         logger.debug(
                                             f"[react_agent][{trace_id}] chunk len={len(final_text)}"
                                         )
-                                        yield final_text + "\n"
+                                        stream_chunk_count += 1
+                                        stream_text_size += len(final_text)
+                                        output_parts.append(final_text + "\n")
+                                        yield AgentEvent(
+                                            "token", {"text": final_text + "\n"}
+                                        )
                                     return
                                 except Exception as tool_exc:
                                     logger.error(
@@ -595,14 +651,31 @@ class ReactAgent:
                                     )
                                     if think_msg not in emitted_status:
                                         emitted_status.add(think_msg)
-                                        yield think_msg + "\n"
+                                        yield AgentEvent(
+                                            "tool",
+                                            {
+                                                "phase": "error",
+                                                "tool": tool_name,
+                                                "text": think_msg + "\n",
+                                                "error_preview": self._preview_event_text(
+                                                    str(tool_exc)
+                                                ),
+                                            },
+                                        )
 
                 for pending in _drain_tool_events():
                     yield pending
 
         except Exception as exc:
             logger.error(f"[react_agent][{trace_id}] stream failed: {exc}")
-            yield f"[ERROR] {exc}"
+            yield AgentEvent(
+                "error",
+                {
+                    "trace_id": trace_id,
+                    "message": str(exc),
+                    "text": f"[ERROR] {exc}",
+                },
+            )
         finally:
             elapsed_ms = (time.perf_counter() - stream_started) * 1000
             logger.info(
@@ -614,6 +687,21 @@ class ReactAgent:
                 self._preview_log_text("".join(output_parts), limit=200),
             )
             clear_tool_events(trace_id)
+            yield AgentEvent(
+                "done",
+                {
+                    "trace_id": trace_id,
+                    "elapsed_ms": elapsed_ms,
+                    "chunk_count": stream_chunk_count,
+                    "char_count": stream_text_size,
+                },
+            )
+
+    def execute_stream(self, query: str):
+        for event in self.execute_events(query):
+            text = self._agent_event_text(event)
+            if text:
+                yield text
 
     def close(self) -> None:
         try:

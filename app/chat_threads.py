@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+from contextlib import closing
 from datetime import datetime
 from typing import Any
 
@@ -34,8 +35,9 @@ class ChatThreadStore:
         return os.path.join(MEMORY_DB_DIR, f"{self._norm_thread_id(thread_id)}.db")
 
     def _connect(self, thread_id: str) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path(thread_id))
+        conn = sqlite3.connect(self._db_path(thread_id), timeout=10.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 10000")
         self._init_db(conn)
         return conn
 
@@ -105,7 +107,7 @@ class ChatThreadStore:
         threads: list[dict[str, Any]] = []
         for thread_id in self.list_thread_ids():
             try:
-                with self._connect(thread_id) as conn:
+                with closing(self._connect(thread_id)) as conn:
                     self._ensure_meta(conn, thread_id)
                     threads.append(
                         {
@@ -138,7 +140,7 @@ class ChatThreadStore:
 
     def create_thread(self) -> dict[str, Any]:
         thread_id = self._next_thread_id()
-        with self._connect(thread_id) as conn:
+        with closing(self._connect(thread_id)) as conn:
             self._ensure_meta(conn, thread_id)
             conn.commit()
             title = self._get_meta(conn, "title", default=thread_id)
@@ -157,7 +159,7 @@ class ChatThreadStore:
             raise ValueError("会话名称不能为空")
         if len(normalized) > THREAD_TITLE_MAX_LEN:
             raise ValueError(f"会话名称长度不能超过 {THREAD_TITLE_MAX_LEN} 字")
-        with self._connect(thread_id) as conn:
+        with closing(self._connect(thread_id)) as conn:
             self._ensure_meta(conn, thread_id)
             self._set_meta(conn, "title", normalized)
             self._set_meta(conn, "updated_at", self._utc_now())
@@ -184,7 +186,7 @@ class ChatThreadStore:
         if not text:
             return
         normalized_role = "assistant" if str(role).strip() == "assistant" else "user"
-        with self._connect(thread_id) as conn:
+        with closing(self._connect(thread_id)) as conn:
             self._ensure_meta(conn, thread_id)
             conn.execute(
                 "INSERT INTO chat_messages(role, content, created_at) VALUES (?, ?, ?)",
@@ -195,7 +197,7 @@ class ChatThreadStore:
 
     def load_messages(self, thread_id: str) -> list[dict[str, str]]:
         thread_id = self._norm_thread_id(thread_id)
-        with self._connect(thread_id) as conn:
+        with closing(self._connect(thread_id)) as conn:
             self._ensure_meta(conn, thread_id)
             rows = conn.execute(
                 "SELECT role, content FROM chat_messages ORDER BY id ASC"
@@ -210,13 +212,13 @@ class ChatThreadStore:
 
     def get_title(self, thread_id: str) -> str:
         thread_id = self._norm_thread_id(thread_id)
-        with self._connect(thread_id) as conn:
+        with closing(self._connect(thread_id)) as conn:
             self._ensure_meta(conn, thread_id)
             return self._get_meta(conn, "title", default=thread_id)
 
     def get_flags(self, thread_id: str) -> dict[str, bool]:
         thread_id = self._norm_thread_id(thread_id)
-        with self._connect(thread_id) as conn:
+        with closing(self._connect(thread_id)) as conn:
             self._ensure_meta(conn, thread_id)
             return {
                 "renamed": self._get_meta(conn, "renamed", default="0") == "1",

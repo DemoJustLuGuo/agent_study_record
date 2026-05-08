@@ -1,4 +1,7 @@
 gradio==5.49.1
+fastapi>=0.115
+uvicorn[standard]>=0.34
+sse-starlette>=2.0
 PyYAML==6.0.3
 langchain==1.2.11
 langchain-core==1.2.18

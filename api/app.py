@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import chat, knowledge, rag, settings, traces
+from api.schemas import HealthResponse, VersionResponse
 
 
 def _cors_origins() -> list[str]:
@@ -39,11 +40,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    @app.get("/health")
+    @app.get("/health", response_model=HealthResponse)
     def health():
         return {"ok": True}
 
-    @app.get("/version")
+    @app.get("/version", response_model=VersionResponse)
     def version():
         return {"version": app.version}
 

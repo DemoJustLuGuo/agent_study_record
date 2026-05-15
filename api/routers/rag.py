@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from api.deps import get_rag_query_service
 from api.errors import bad_request
+from api.schemas import RagQueryResponse
 from services.rag_query_service import RagQueryService
 
 
@@ -15,7 +16,7 @@ class RagQueryRequest(BaseModel):
 def create_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/rag", tags=["rag"])
 
-    @router.post("/query")
+    @router.post("/query", response_model=RagQueryResponse)
     def query_rag(
         body: RagQueryRequest,
         service: RagQueryService = Depends(get_rag_query_service),

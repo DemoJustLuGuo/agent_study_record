@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 
 from api.deps import get_chat_service
 from api.errors import bad_request
+from api.schemas import (
+    ThreadListResponse,
+    ThreadOperationResponse,
+    ThreadStateResponse,
+)
 from services.chat_service import ChatEvent, ChatService
 
 try:
@@ -33,7 +38,7 @@ def _next_event(iterator: Iterator[ChatEvent]) -> ChatEvent | None:
 def create_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
-    @router.get("/threads")
+    @router.get("/threads", response_model=ThreadListResponse)
     def list_threads(service: ChatService = Depends(get_chat_service)):
         state = service.get_initial_state_data()
         return {
@@ -41,11 +46,11 @@ def create_router() -> APIRouter:
             "current_thread_id": state["thread_id"],
         }
 
-    @router.post("/threads")
+    @router.post("/threads", response_model=ThreadOperationResponse)
     def create_thread(service: ChatService = Depends(get_chat_service)):
         return service.create_thread()
 
-    @router.get("/threads/{thread_id}")
+    @router.get("/threads/{thread_id}", response_model=ThreadStateResponse)
     def get_thread(thread_id: str, service: ChatService = Depends(get_chat_service)):
         result = service.switch_thread(thread_id)
         return {
@@ -54,7 +59,7 @@ def create_router() -> APIRouter:
             "status": result["status"],
         }
 
-    @router.post("/threads/{thread_id}/rename")
+    @router.post("/threads/{thread_id}/rename", response_model=ThreadOperationResponse)
     def rename_thread(
         thread_id: str,
         body: RenameThreadRequest,
@@ -65,7 +70,7 @@ def create_router() -> APIRouter:
             raise bad_request(str(result.get("status") or "重命名失败"))
         return result
 
-    @router.delete("/threads/{thread_id}")
+    @router.delete("/threads/{thread_id}", response_model=ThreadOperationResponse)
     def close_thread(thread_id: str, service: ChatService = Depends(get_chat_service)):
         return service.close_thread(thread_id)
 

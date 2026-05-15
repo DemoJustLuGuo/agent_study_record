@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from api.deps import require_admin
+from api.schemas import ConnectionSettingsResponse, SaveConnectionSettingsResponse
 from services.settings_service import (
     load_connection_defaults,
     save_connection_settings,
@@ -22,7 +23,7 @@ def create_router() -> APIRouter:
         dependencies=[Depends(require_admin)],
     )
 
-    @router.get("/connection")
+    @router.get("/connection", response_model=ConnectionSettingsResponse)
     def get_connection_settings():
         base_url, _api_key, status = load_connection_defaults()
         return {
@@ -33,7 +34,7 @@ def create_router() -> APIRouter:
             "note": "真实 API Key 不会通过 API 返回；直接保存真实密钥只影响当前进程环境。",
         }
 
-    @router.post("/connection")
+    @router.post("/connection", response_model=SaveConnectionSettingsResponse)
     def save_connection_settings_endpoint(body: ConnectionSettingsRequest):
         message = save_connection_settings(body.openai_base_url, body.openai_api_key)
         return {

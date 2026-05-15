@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from api.deps import get_knowledge_service, require_admin
 from api.errors import bad_request
+from api.schemas import KnowledgeActionResponse
 from services.knowledge_service import KnowledgeService
 
 
@@ -35,25 +36,25 @@ def create_router() -> APIRouter:
         dependencies=[Depends(require_admin)],
     )
 
-    @router.post("/web-ingest")
+    @router.post("/web-ingest", response_model=KnowledgeActionResponse)
     def ingest_web_urls(
         body: WebIngestRequest,
         service: KnowledgeService = Depends(get_knowledge_service),
     ):
         return _raise_if_error(service.ingest_web_urls(body.urls, body.operator))
 
-    @router.post("/sync")
+    @router.post("/sync", response_model=KnowledgeActionResponse)
     def sync_knowledge(service: KnowledgeService = Depends(get_knowledge_service)):
         return _raise_if_error(service.sync_removed_sources())
 
-    @router.post("/snapshot")
+    @router.post("/snapshot", response_model=KnowledgeActionResponse)
     def create_snapshot(
         body: SnapshotRequest,
         service: KnowledgeService = Depends(get_knowledge_service),
     ):
         return _raise_if_error(service.create_snapshot(body.tag))
 
-    @router.post("/rollback")
+    @router.post("/rollback", response_model=KnowledgeActionResponse)
     def rollback_snapshot(
         body: RollbackRequest,
         service: KnowledgeService = Depends(get_knowledge_service),

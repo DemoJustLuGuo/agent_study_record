@@ -43,11 +43,12 @@ def build_rag_tab() -> None:
             inputs=[rag_input],
             outputs=[rag_answer, rag_refs],
             show_progress="hidden",
+            api_name=False,
         ).then(
             fn=rag_query,
             inputs=[rag_input],
             outputs=[rag_answer, rag_refs],
-            api_name="rag_query",
+            api_name=False,
         )
 
         gr.HTML('<div class="section-divider"></div>')
@@ -68,12 +69,12 @@ def build_rag_tab() -> None:
             inputs=None,
             outputs=[metrics_panel],
             show_progress="hidden",
-            api_name="rag_metrics_refresh",
+            api_name=False,
         )
         metrics_reset_btn.click(
             fn=reset_rag_metrics_panel,
             inputs=None,
             outputs=[metrics_panel],
             show_progress="hidden",
-            api_name="rag_metrics_reset",
+            api_name=False,
         )

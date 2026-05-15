@@ -80,28 +80,33 @@ def build_chat_tab() -> None:
             fn=switch_chat_thread,
             inputs=[thread_selector],
             outputs=[thread_selector, chatbot, thread_state, chat_status],
+            api_name=False,
         )
 
         create_btn.click(
             fn=create_chat_thread,
             inputs=[thread_state],
             outputs=[thread_selector, chatbot, thread_state, chat_status],
+            api_name=False,
         )
 
         close_btn.click(
             fn=close_chat_thread,
             inputs=[thread_state],
             outputs=[thread_selector, chatbot, thread_state, chat_status],
+            api_name=False,
         )
 
         rename_btn.click(
             fn=rename_chat_thread,
             inputs=[thread_state, rename_input],
             outputs=[thread_selector, thread_state, chat_status, rename_input],
+            api_name=False,
         )
 
         msg_input.submit(
             fn=stream_thread_reply,
             inputs=[thread_state, msg_input, chatbot],
             outputs=[chatbot, msg_input, chat_status, thread_selector],
+            api_name=False,
         )

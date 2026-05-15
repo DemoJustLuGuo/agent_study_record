@@ -1,13 +1,20 @@
 # 后端 API 契约说明
 
-本文档记录当前 FastAPI 后端的第一版响应契约。后端入口与 Gradio 入口并存：
+本文档记录当前 FastAPI 后端的第一版响应契约。`api.main` 是正式后端控制面，`app.main` 保留为旧 Gradio UI / 本地调试入口：
 
 ```powershell
 venv\Scripts\python.exe -m app.main
 venv\Scripts\python.exe -m api.main
 ```
 
-`api.main` 默认监听 `127.0.0.1:8000`。管理类接口需要在运行环境设置 `APP_ADMIN_TOKEN`，请求时使用：
+`api.main` 默认监听 `127.0.0.1:8000`。Gradio 默认监听 `127.0.0.1:7860`，但默认不展示 Gradio API，也不通过 Gradio API 暴露 UI 回调。若需要本地调试 Gradio API 文档，可显式设置：
+
+```powershell
+$env:GRADIO_SHOW_API = "1"
+venv\Scripts\python.exe -m app.main
+```
+
+对外集成、管理操作和新前端对接应使用 FastAPI。管理类接口需要在运行环境设置 `APP_ADMIN_TOKEN`，请求时使用：
 
 ```text
 Authorization: Bearer <APP_ADMIN_TOKEN>
@@ -337,4 +344,3 @@ event: error
 ```
 
 Trace API 只返回脱敏投影，不返回完整工具代码、完整工具参数、完整工具结果、完整模型输入输出。
-

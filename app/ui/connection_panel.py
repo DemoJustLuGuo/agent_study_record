@@ -32,10 +32,12 @@ def build_connection_panel(
         inputs=[openai_base_url_input, openai_api_key_input],
         outputs=[connection_status],
         show_progress="hidden",
+        api_name=False,
     )
     openai_api_key_input.change(
         fn=save_connection_settings,
         inputs=[openai_base_url_input, openai_api_key_input],
         outputs=[connection_status],
         show_progress="hidden",
+        api_name=False,
     )

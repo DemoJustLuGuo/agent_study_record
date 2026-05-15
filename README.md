@@ -97,21 +97,12 @@ agent_study_record/
 - `store_memory`
 - `search_memory`
 
-## Gradio 页面与 API
+## Gradio 页面与 FastAPI 控制面
 
-- 智能体对话：流式 ReAct 交互
-  - `stream_thread_reply`（按 thread_id 处理多会话）
-  - `create_chat_thread` / `switch_chat_thread` / `rename_chat_thread` / `close_chat_thread`
-  - 会话会在重启后从 `memory_db/thread_<n>.db` 恢复；关闭会话即删除对应 db
-- 在线 RAG：`rag_query`
-  - `rag_metrics_refresh`
-  - `rag_metrics_reset`
-- 知识库管理：
-  - `knowledge_upload`
-  - `knowledge_web_ingest`
-  - `knowledge_sync`
-  - `knowledge_snapshot`
-  - `knowledge_rollback`
+- `python -m app.main` 启动的是旧 Gradio UI / 本地调试入口，默认不展示 Gradio API，也不通过 Gradio API 暴露 UI 回调。
+- 如需调试 Gradio API 文档，可在本地显式设置 `GRADIO_SHOW_API=1` 后启动 Gradio。
+- `python -m api.main` 启动的是正式 FastAPI 后端控制面，外部集成、新前端对接、聊天 SSE、RAG 查询、知识库管理、连接设置和 trace 查询都应使用 FastAPI。
+- FastAPI 管理类接口使用 `APP_ADMIN_TOKEN` 鉴权；真实 API Key 不应通过接口返回或写入文档。
 
 ## 知识库生命周期（CLI）
 

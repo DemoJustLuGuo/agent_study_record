@@ -43,13 +43,13 @@ python rag/vector_store.py load
 
 FastAPI 后端：
 
-```bash
-python -m api.main
+```powershell
+venv\Scripts\python.exe -m api.main
 ```
 
 React 控制台：
 
-```bash
+```powershell
 cd web
 npm install
 npm run dev
@@ -59,21 +59,11 @@ npm run dev
 
 Gradio 旧 UI / 本地调试入口：
 
-```bash
-python -m app.main
-```
-
-Windows：
-
-```bat
-launch.bat
-```
-
-PowerShell：
-
 ```powershell
-Launch.ps1
+venv\Scripts\python.exe -m app.main
 ```
+
+仓库不再提供 `Launch.ps1` / `launch.bat` 一键启动脚本。前后端启动均使用上面的显式命令；如需调试 Gradio API 文档，可在启动前设置 `GRADIO_SHOW_API=1`。
 
 日志等级可通过环境变量 `LOG_LEVEL` 控制（`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`）。
 
@@ -133,6 +123,26 @@ python rag/vector_store.py sync
 python rag/vector_store.py snapshot --tag release_note
 python rag/vector_store.py rollback <snapshot_name>
 ```
+
+## 本地运行数据移除
+
+仓库不再提供 `Remove-Logs.ps1` / `Remove-RagDB.ps1` 清理脚本。需要清理本地运行数据时，先停止后端、前端和 Gradio 进程，再按目标执行显式命令。
+
+清理日志与 trace：
+
+```powershell
+Remove-Item -LiteralPath .\logs -Recurse -Force
+```
+
+清理 RAG 向量库与指纹文件（会使知识库需要重新 `load` 或重新入库）：
+
+```powershell
+Remove-Item -LiteralPath .\chroma_db -Recurse -Force
+Remove-Item -LiteralPath .\chroma_manifest.json -Force
+Remove-Item -LiteralPath .\md5.text -Force
+```
+
+不要把 `chroma_db/`、`logs/`、`memory_db/`、`chroma_manifest.json` 或 `md5.text` 提交到 Git。清理 `memory_db/` 会删除本地会话记忆，默认不建议执行。
 
 ## 可观测性
 

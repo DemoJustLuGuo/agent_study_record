@@ -17,6 +17,12 @@ tests/
 build/
 dist/
 *.egg-info/
+node_modules/
+web/node_modules/
+web/dist/
+web/.vite/
+web/.eslintcache
+.playwright-mcp/
 
 
 # 日志

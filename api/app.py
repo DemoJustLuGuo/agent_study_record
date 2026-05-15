@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import chat, knowledge, rag, settings, traces
 from api.schemas import HealthResponse, VersionResponse
+from api.version import API_VERSION
 
 
 def _cors_origins() -> list[str]:
@@ -29,7 +30,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="通信智能体后端 API",
-        version="0.14.0",
+        version=API_VERSION,
         lifespan=lifespan,
     )
     app.add_middleware(

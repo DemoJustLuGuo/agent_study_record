@@ -37,9 +37,26 @@ pip install -r requirements.txt
 python rag/vector_store.py load
 ```
 
-### (4) 启动应用
+### (4) 启动后端与前端
 
-python：
+FastAPI 后端：
+
+```bash
+python -m api.main
+```
+
+React 控制台：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+默认后端地址：`http://127.0.0.1:8000`。默认前端地址：`http://127.0.0.1:5173`。
+
+Gradio 旧 UI / 本地调试入口：
+
 ```bash
 python -m app.main
 ```
@@ -56,8 +73,6 @@ PowerShell：
 Launch.ps1
 ```
 
-默认访问地址：`http://127.0.0.1:7860`
-
 日志等级可通过环境变量 `LOG_LEVEL` 控制（`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`）。
 
 
@@ -65,6 +80,8 @@ Launch.ps1
 
 ```text
 agent_study_record/
+├─ web/                    # React + TypeScript + Tailwind 前端控制台
+├─ api/                    # FastAPI 正式后端控制面
 ├─ app/                    # Gradio UI（app_builder/runtime/ui/*）与启动入口
 ├─ agent/                  # ReactAgent、middleware、tools
 ├─ rag/                    # 向量库/RAG/知识库/记忆服务
@@ -81,11 +98,12 @@ agent_study_record/
 
 ## 运行链路
 
-1. 用户在 Gradio 输入问题（`app/ui/*.py` 定义界面，`app/runtime.py` 执行回调）
-2. `ReactAgent.execute_stream()` 调用 `create_agent(...)` 流式推理
-3. Agent 通过 `agent/tools/registry.py` 注册工具并按需调用
-4. `agent/middleware.py` 记录模型/工具事件到 `logs/traces/*.jsonl`
-5. RAG/Memory 工具进入 `rag/*`，访问 Chroma 向量库并返回结果
+1. 用户在 React 控制台输入问题（`web/src/*` 调用 FastAPI）
+2. FastAPI 通过 `services/chat_service.py` 进入 Agent 流式服务
+3. `ReactAgent.execute_events()` 调用 `create_agent(...)` 流式推理
+4. Agent 通过 `agent/tools/registry.py` 注册工具并按需调用
+5. `agent/middleware.py` 记录模型/工具事件到 `logs/traces/*.jsonl`
+6. RAG/Memory 工具进入 `rag/*`，访问 Chroma 向量库并返回结果
 
 ## 可用工具（当前注册）
 
@@ -99,6 +117,7 @@ agent_study_record/
 
 ## Gradio 页面与 FastAPI 控制面
 
+- `cd web && npm run dev` 启动的是 React/TS/Tailwind 前端控制台，覆盖 Chat、RAG、Knowledge、Settings、Traces 日常工作流。
 - `python -m app.main` 启动的是旧 Gradio UI / 本地调试入口，默认不展示 Gradio API，也不通过 Gradio API 暴露 UI 回调。
 - 如需调试 Gradio API 文档，可在本地显式设置 `GRADIO_SHOW_API=1` 后启动 Gradio。
 - `python -m api.main` 启动的是正式 FastAPI 后端控制面，外部集成、新前端对接、聊天 SSE、RAG 查询、知识库管理、连接设置和 trace 查询都应使用 FastAPI。

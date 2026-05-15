@@ -5,8 +5,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class FlexibleModel(BaseModel):
-    model_config = ConfigDict(extra="allow")
+class ResponseModel(BaseModel):
+    model_config = ConfigDict(extra="ignore")
 
 
 class HealthResponse(BaseModel):
@@ -22,7 +22,7 @@ class ChatMessage(BaseModel):
     content: str
 
 
-class ThreadSummary(FlexibleModel):
+class ThreadSummary(ResponseModel):
     thread_id: str
     title: str = ""
     renamed: bool = False
@@ -41,7 +41,7 @@ class ThreadStateResponse(BaseModel):
     status: str = ""
 
 
-class ThreadOperationResponse(FlexibleModel):
+class ThreadOperationResponse(ResponseModel):
     thread_id: str = ""
     threads: list[ThreadSummary] = Field(default_factory=list)
     choices: list[tuple[str, str]] = Field(default_factory=list)
@@ -50,12 +50,12 @@ class ThreadOperationResponse(FlexibleModel):
     ok: bool | None = None
 
 
-class RagReference(FlexibleModel):
+class RagReference(ResponseModel):
     content: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class RagQueryResponse(FlexibleModel):
+class RagQueryResponse(ResponseModel):
     query: str = ""
     answer: str = ""
     references: list[RagReference] = Field(default_factory=list)
@@ -64,10 +64,25 @@ class RagQueryResponse(FlexibleModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
 
 
-class KnowledgeActionResponse(FlexibleModel):
+class KnowledgeActionDetail(ResponseModel):
+    url: str = ""
+    status: str = ""
+    reason: str = ""
+    cleaning: dict[str, Any] = Field(default_factory=dict)
+
+
+class KnowledgeActionResponse(ResponseModel):
     result: str | None = None
     snapshot: str | None = None
     error: str | None = None
+    total: int | None = None
+    added: int | None = None
+    updated: int | None = None
+    skipped: int | None = None
+    failed: int | None = None
+    details: list[KnowledgeActionDetail] = Field(default_factory=list)
+    removed_source_count: int | None = None
+    removed_sources: list[str] = Field(default_factory=list)
 
 
 class ConnectionSettingsResponse(BaseModel):

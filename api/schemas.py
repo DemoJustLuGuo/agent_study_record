@@ -85,19 +85,6 @@ class KnowledgeActionResponse(ResponseModel):
     removed_sources: list[str] = Field(default_factory=list)
 
 
-class ConnectionSettingsResponse(BaseModel):
-    openai_base_url: str = ""
-    api_key_configured: bool = False
-    api_key: str = ""
-    status: str = ""
-    note: str = ""
-
-
-class SaveConnectionSettingsResponse(BaseModel):
-    message: str
-    note: str
-
-
 class TraceListItem(BaseModel):
     trace_id: str
     updated_at: float

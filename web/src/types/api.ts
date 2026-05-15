@@ -122,19 +122,6 @@ export type KnowledgeActionResponse = {
   removed_sources?: string[];
 };
 
-export type ConnectionSettingsResponse = {
-  openai_base_url: string;
-  api_key_configured: boolean;
-  api_key: string;
-  status: string;
-  note: string;
-};
-
-export type SaveConnectionSettingsResponse = {
-  message: string;
-  note: string;
-};
-
 export type TraceListItem = {
   trace_id: string;
   updated_at: number;

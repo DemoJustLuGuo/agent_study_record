@@ -12,6 +12,8 @@ venv/
 .pytest_cache/
 .mypy_cache/
 tests/
+!web/tests/
+!web/tests/**
 
 # 构建产物
 build/
@@ -22,6 +24,8 @@ web/node_modules/
 web/dist/
 web/.vite/
 web/.eslintcache
+web/playwright-report/
+web/test-results/
 .playwright-mcp/
 
 

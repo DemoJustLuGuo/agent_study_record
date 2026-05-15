@@ -1,8 +1,6 @@
 import type {
-  ConnectionSettingsResponse,
   KnowledgeActionResponse,
   RagQueryResponse,
-  SaveConnectionSettingsResponse,
   ThreadListResponse,
   ThreadOperationResponse,
   ThreadStateResponse,
@@ -117,24 +115,6 @@ export const api = {
       body: JSON.stringify({
         snapshot_name: snapshotName,
         confirm_name: confirmName,
-      }),
-      adminToken,
-    }),
-
-  getConnectionSettings: (adminToken: string) =>
-    apiRequest<ConnectionSettingsResponse>("/api/v1/settings/connection", {
-      adminToken,
-    }),
-  saveConnectionSettings: (
-    openaiBaseUrl: string,
-    openaiApiKey: string,
-    adminToken: string
-  ) =>
-    apiRequest<SaveConnectionSettingsResponse>("/api/v1/settings/connection", {
-      method: "POST",
-      body: JSON.stringify({
-        openai_base_url: openaiBaseUrl,
-        openai_api_key: openaiApiKey,
       }),
       adminToken,
     }),

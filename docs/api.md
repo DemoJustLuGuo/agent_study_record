@@ -20,7 +20,7 @@ venv\Scripts\python.exe -m app.main
 Authorization: Bearer <APP_ADMIN_TOKEN>
 ```
 
-真实 API Key 不通过后端 API 返回。通过 settings API 保存真实密钥时，只写入当前后端进程的 `os.environ`，多 worker 或重启后仍应通过进程启动环境配置。
+真实 API Key 不通过后端 API 返回，也不提供 settings API 写入入口。后端启动时会只读加载项目根目录 `.env`，但不会覆盖已存在的系统环境变量；修改 `.env` 后需要重启后端。
 
 ## 公共响应
 
@@ -274,40 +274,6 @@ event: error
 ```
 
 `confirm_name` 必须与 `snapshot_name` 完全一致。响应不得暴露快照绝对路径。
-
-## Settings API
-
-以下接口均需要 Admin Token。
-
-### GET `/api/v1/settings/connection`
-
-```json
-{
-  "openai_base_url": "https://...",
-  "api_key_configured": false,
-  "api_key": "",
-  "status": "...",
-  "note": "真实 API Key 不会通过 API 返回..."
-}
-```
-
-### POST `/api/v1/settings/connection`
-
-```json
-{
-  "openai_base_url": "https://...",
-  "openai_api_key": "SILICONFLOW_API_KEY"
-}
-```
-
-响应：
-
-```json
-{
-  "message": "...",
-  "note": "真实 API Key 写入 os.environ 时只影响当前后端进程..."
-}
-```
 
 ## Trace API
 

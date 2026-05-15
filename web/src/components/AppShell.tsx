@@ -3,19 +3,17 @@ import {
   MessageSquareText,
   RadioTower,
   Search,
-  Settings,
   TerminalSquare,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { StatusBar } from "./StatusBar";
 
-export type PageKey = "chat" | "rag" | "knowledge" | "settings" | "traces";
+export type PageKey = "chat" | "rag" | "knowledge" | "traces";
 
 const navItems: { key: PageKey; label: string; icon: ReactNode }[] = [
   { key: "chat", label: "Chat", icon: <MessageSquareText className="h-4 w-4" /> },
   { key: "rag", label: "RAG", icon: <Search className="h-4 w-4" /> },
   { key: "knowledge", label: "Knowledge", icon: <Database className="h-4 w-4" /> },
-  { key: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
   { key: "traces", label: "Traces", icon: <TerminalSquare className="h-4 w-4" /> },
 ];
 

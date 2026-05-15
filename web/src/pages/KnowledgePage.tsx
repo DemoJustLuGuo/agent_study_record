@@ -11,6 +11,35 @@ type KnowledgePageProps = {
   onAdminTokenChange: (value: string) => void;
 };
 
+function splitUrlInput(value: string) {
+  return value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function validateWebUrls(value: string) {
+  const items = splitUrlInput(value);
+  if (!items.length) {
+    return "请至少输入一个 HTTP/HTTPS URL。";
+  }
+  if (items.some((item) => !/^https?:\/\/\S+$/i.test(item))) {
+    return "网页入库仅接受 HTTP/HTTPS URL，每行一个或用逗号分隔。";
+  }
+  return "";
+}
+
+function validateSnapshotTag(value: string) {
+  const text = value.trim();
+  if (!text) {
+    return "";
+  }
+  if (text.length > 64 || !/^[A-Za-z0-9._-]+$/.test(text)) {
+    return "快照标签最多 64 个字符，只能包含字母、数字、点、下划线和短横线。";
+  }
+  return "";
+}
+
 function ResultPanel({ result }: { result: KnowledgeActionResponse | null }) {
   if (!result) {
     return <p className="text-sm text-console-subdued">等待执行管理操作。</p>;
@@ -53,13 +82,21 @@ export function KnowledgePage({
   const [result, setResult] = useState<KnowledgeActionResponse | null>(null);
   const [error, setError] = useState("");
   const [loadingAction, setLoadingAction] = useState("");
+  const rollbackReady =
+    Boolean(snapshotName.trim()) && snapshotName.trim() === confirmName.trim();
 
   async function runAction(
     actionName: string,
-    action: () => Promise<KnowledgeActionResponse>
+    action: () => Promise<KnowledgeActionResponse>,
+    validate?: () => string
   ) {
     if (!adminToken) {
       setError("请先配置本地管理 Token。");
+      return;
+    }
+    const validationError = validate?.() || "";
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError("");
@@ -110,7 +147,11 @@ export function KnowledgePage({
               <Button
                 loading={loadingAction === "web"}
                 onClick={() =>
-                  runAction("web", () => api.webIngest(urls, operator, adminToken))
+                  runAction(
+                    "web",
+                    () => api.webIngest(urls, operator, adminToken),
+                    () => validateWebUrls(urls)
+                  )
                 }
                 variant="primary"
               >
@@ -152,8 +193,10 @@ export function KnowledgePage({
               <Button
                 loading={loadingAction === "snapshot"}
                 onClick={() =>
-                  runAction("snapshot", () =>
-                    api.createSnapshot(snapshotTag, adminToken)
+                  runAction(
+                    "snapshot",
+                    () => api.createSnapshot(snapshotTag.trim(), adminToken),
+                    () => validateSnapshotTag(snapshotTag)
                   )
                 }
               >
@@ -186,17 +229,27 @@ export function KnowledgePage({
             </div>
             <Button
               className="mt-3"
+              disabled={!rollbackReady}
               icon={<RotateCcw className="h-4 w-4" aria-hidden="true" />}
               loading={loadingAction === "rollback"}
               onClick={() =>
                 runAction("rollback", () =>
-                  api.rollbackSnapshot(snapshotName, confirmName, adminToken)
+                  api.rollbackSnapshot(
+                    snapshotName.trim(),
+                    confirmName.trim(),
+                    adminToken
+                  )
                 )
               }
               variant="danger"
             >
               确认回滚
             </Button>
+            {!rollbackReady ? (
+              <p className="mt-2 text-xs text-console-subdued">
+                请输入同一个非空快照名称后才能执行回滚。
+              </p>
+            ) : null}
           </section>
         </div>
 

@@ -22,14 +22,16 @@
 pip install -r requirements.txt
 ```
 
-### (2) 配置模型
+### (2) 配置本地环境
 
-编辑 `model/config/agent.yml` 或设置环境变量：
+复制 `.env.example` 为 `.env`，填写本机开发所需的环境变量：
 
-- `OPENAI_API_KEY`（可填环境变量名，如 `SILICONFLOW_API_KEY`）
-- `openai_base_url`（默认 `https://api.siliconflow.cn/v1`）
-- `chat_model_name`
-- `embedding_model_name`
+- `APP_ADMIN_TOKEN`：FastAPI 管理类接口鉴权 token。
+- `OPENAI_BASE_URL`：OpenAI 兼容接口地址；未设置时继续使用 `model/config/agent.yml` 中的 `openai_base_url`。
+- `OPENAI_API_KEY` / `SILICONFLOW_API_KEY`：真实密钥只放在 `.env` 或系统环境变量中。
+- `VITE_API_BASE_URL` / `VITE_ADMIN_TOKEN`：前端本地开发变量，仅 `VITE_` 前缀会暴露给浏览器。
+
+`.env` 已被 `.gitignore` 忽略，不要提交真实密钥。修改 `.env` 后需要重启后端；前端 `VITE_*` 变量变更后也需要重启 Vite。
 
 ### (3) 初始化知识库（建议）
 
@@ -117,11 +119,11 @@ agent_study_record/
 
 ## Gradio 页面与 FastAPI 控制面
 
-- `cd web && npm run dev` 启动的是 React/TS/Tailwind 前端控制台，覆盖 Chat、RAG、Knowledge、Settings、Traces 日常工作流。
-- `python -m app.main` 启动的是旧 Gradio UI / 本地调试入口，默认不展示 Gradio API，也不通过 Gradio API 暴露 UI 回调。
+- `cd web && npm run dev` 启动的是 React/TS/Tailwind 前端控制台，覆盖 Chat、RAG、Knowledge、Traces 日常工作流。
+- `venv\Scripts\python.exe -m app.main` 启动的是旧 Gradio UI / 本地调试入口，默认不展示 Gradio API，也不通过 Gradio API 暴露 UI 回调。
 - 如需调试 Gradio API 文档，可在本地显式设置 `GRADIO_SHOW_API=1` 后启动 Gradio。
-- `python -m api.main` 启动的是正式 FastAPI 后端控制面，外部集成、新前端对接、聊天 SSE、RAG 查询、知识库管理、连接设置和 trace 查询都应使用 FastAPI。
-- FastAPI 管理类接口使用 `APP_ADMIN_TOKEN` 鉴权；真实 API Key 不应通过接口返回或写入文档。
+- `venv\Scripts\python.exe -m api.main` 启动的是正式 FastAPI 后端控制面，外部集成、新前端对接、聊天 SSE、RAG 查询、知识库管理和 trace 查询都应使用 FastAPI。
+- FastAPI 管理类接口使用 `APP_ADMIN_TOKEN` 鉴权；模型连接地址和真实 API Key 只通过 `.env` 或系统环境变量管理，不通过 Web UI 或 API 写入。
 
 ## 知识库生命周期（CLI）
 

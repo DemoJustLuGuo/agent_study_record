@@ -6,7 +6,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import chat, knowledge, rag, settings, traces
+from utils.env_loader import load_project_dotenv
+
+load_project_dotenv()
+
+from api.routers import chat, knowledge, rag, traces
 from api.schemas import HealthResponse, VersionResponse
 from api.version import API_VERSION
 
@@ -52,6 +56,5 @@ def create_app() -> FastAPI:
     app.include_router(chat.create_router())
     app.include_router(rag.create_router())
     app.include_router(knowledge.create_router())
-    app.include_router(settings.create_router())
     app.include_router(traces.create_router())
     return app

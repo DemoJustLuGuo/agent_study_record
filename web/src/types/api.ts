@@ -25,7 +25,6 @@ export type ThreadStateResponse = {
 export type ThreadOperationResponse = {
   thread_id: string;
   threads: ThreadSummary[];
-  choices: [string, string][];
   history: ChatMessage[];
   status: string;
   ok?: boolean | null;
@@ -70,7 +69,6 @@ export type ChatStreamEvent =
         status?: string;
         trace_id?: string;
         title_changed?: boolean;
-        choices?: [string, string][];
       };
     }
   | {

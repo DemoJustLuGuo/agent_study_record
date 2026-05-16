@@ -8,7 +8,7 @@ from typing import Any, Callable, Iterator
 from langchain_openai import ChatOpenAI
 
 from agent.events import AgentEvent
-from app.chat_threads import ChatThreadStore, THREAD_TITLE_MAX_LEN
+from services.chat_threads import ChatThreadStore, THREAD_TITLE_MAX_LEN
 from services.settings_service import resolve_secret
 from utils.config_handler import memory_conf
 from utils.log import logger
@@ -61,13 +61,6 @@ class ChatService:
             return text
         created = self.store.create_thread()
         return str(created["thread_id"])
-
-    @staticmethod
-    def _thread_choices(threads: list[dict[str, Any]]) -> list[tuple[str, str]]:
-        return [
-            (f"{item.get('title', item.get('thread_id', '会话'))}", item["thread_id"])
-            for item in threads
-        ]
 
     def _stream_lock_for(self, thread_id: str) -> Lock:
         with self._stream_locks_lock:
@@ -126,7 +119,6 @@ class ChatService:
         threads = self.store.list_threads()
         return {
             "threads": threads,
-            "choices": self._thread_choices(threads),
             "history": self.store.load_messages(thread_id),
             "thread_id": thread_id,
             "status": self.chat_status(thread_id),
@@ -143,7 +135,6 @@ class ChatService:
         threads = self.store.list_threads()
         return {
             "threads": threads,
-            "choices": self._thread_choices(threads),
             "history": [],
             "thread_id": thread_id,
             "status": self.chat_status(thread_id, "已创建新会话"),
@@ -159,7 +150,6 @@ class ChatService:
         threads = self.store.list_threads()
         return {
             "threads": threads,
-            "choices": self._thread_choices(threads),
             "history": self.store.load_messages(selected),
             "thread_id": selected,
             "status": self.chat_status(selected, "已切换"),
@@ -194,7 +184,6 @@ class ChatService:
         return {
             "ok": True,
             "threads": threads,
-            "choices": self._thread_choices(threads),
             "thread_id": selected,
             "status": self.chat_status(selected, "已重命名"),
             "reset_title": "",
@@ -220,7 +209,6 @@ class ChatService:
         threads = self.store.list_threads()
         return {
             "threads": threads,
-            "choices": self._thread_choices(threads),
             "history": history,
             "thread_id": new_selected,
             "status": self.chat_status(new_selected, "已关闭会话并删除记忆文件"),
@@ -367,7 +355,6 @@ class ChatService:
                         selected, "已自动命名" if title_changed else "回复完成"
                     ),
                     "threads": threads,
-                    "choices": self._thread_choices(threads) if threads else [],
                     "title_changed": title_changed,
                     **done_payload,
                 },

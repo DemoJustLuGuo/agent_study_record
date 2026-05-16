@@ -44,7 +44,6 @@ class ThreadStateResponse(BaseModel):
 class ThreadOperationResponse(ResponseModel):
     thread_id: str = ""
     threads: list[ThreadSummary] = Field(default_factory=list)
-    choices: list[tuple[str, str]] = Field(default_factory=list)
     history: list[ChatMessage] = Field(default_factory=list)
     status: str = ""
     ok: bool | None = None

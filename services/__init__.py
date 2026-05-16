@@ -1,1 +1,1 @@
-"""Business services shared by Gradio callbacks and future API routes."""
+"""Business services shared by API routes and background workflows."""

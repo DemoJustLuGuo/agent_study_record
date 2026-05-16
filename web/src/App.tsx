@@ -13,7 +13,13 @@ export default function App() {
   return (
     <AppShell activePage={activePage} onNavigate={setActivePage}>
       {activePage === "chat" ? <ChatPage /> : null}
-      {activePage === "rag" ? <RagPage /> : null}
+      {activePage === "rag" ? (
+        <RagPage
+          adminToken={adminToken.token}
+          adminTokenSource={adminToken.source}
+          onAdminTokenChange={adminToken.setToken}
+        />
+      ) : null}
       {activePage === "knowledge" ? (
         <KnowledgePage
           adminToken={adminToken.token}

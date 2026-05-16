@@ -99,6 +99,16 @@ export type RagQueryResponse = {
   metrics: Record<string, unknown>;
 };
 
+export type RagMetricsResponse = {
+  summary: Record<string, number>;
+  strategy_distribution: Record<string, number>;
+  recent_events: Record<string, unknown>[];
+};
+
+export type RagMetricsResetResponse = {
+  message: string;
+};
+
 export type KnowledgeActionDetail = {
   url?: string;
   status?: string;
@@ -110,6 +120,8 @@ export type KnowledgeActionResponse = {
   result?: string | null;
   snapshot?: string | null;
   error?: string | null;
+  filename?: string | null;
+  source_type?: string | null;
   total?: number | null;
   added?: number | null;
   updated?: number | null;
@@ -118,6 +130,11 @@ export type KnowledgeActionResponse = {
   details?: KnowledgeActionDetail[];
   removed_source_count?: number | null;
   removed_sources?: string[];
+};
+
+export type KnowledgeUploadPolicyResponse = {
+  allowed_extensions: string[];
+  fully_supported_extensions: string[];
 };
 
 export type TraceListItem = {

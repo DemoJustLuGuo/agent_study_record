@@ -1,5 +1,6 @@
 import {
   CheckCircle2,
+  Copy,
   Loader2,
   MessageSquarePlus,
   Pencil,
@@ -23,6 +24,13 @@ type ToolLog = {
   error: string;
 };
 
+const PROMPT_EXAMPLES = [
+  "请解释 OFDM 中循环前缀的作用，并说明过短会带来什么问题。",
+  "给出一次无线链路预算的计算步骤，列出常见输入参数。",
+  "分析 TCP 重传增多时应优先检查哪些网络指标。",
+  "请基于知识库检索 5G NR 帧结构相关内容。",
+];
+
 function emptyAssistantMessage(history: ChatMessage[]) {
   const next = [...history];
   if (next[next.length - 1]?.role !== "assistant") {
@@ -42,6 +50,7 @@ export function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [tools, setTools] = useState<ToolLog[]>([]);
+  const [copiedMessageId, setCopiedMessageId] = useState("");
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.thread_id === threadId),
@@ -214,6 +223,16 @@ export function ChatPage() {
     setIsStreaming(false);
   }
 
+  async function copyAssistantMessage(messageId: string, content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+      window.setTimeout(() => setCopiedMessageId(""), 1200);
+    } catch {
+      setError("复制失败，请检查浏览器剪贴板权限。");
+    }
+  }
+
   return (
     <section className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)_22rem]">
       <aside className="panel p-3">
@@ -288,21 +307,37 @@ export function ChatPage() {
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           {history.length ? (
-            history.map((item, index) => (
+            history.map((item, index) => {
+              const messageId = `${item.role}-${index}`;
+              return (
               <article
                 className={`max-w-[85%] rounded-lg border px-4 py-3 text-sm leading-6 ${
                   item.role === "user"
                     ? "ml-auto border-console-accent/40 bg-console-accent/10"
                     : "border-console-border bg-console-bg"
                 }`}
-                key={`${item.role}-${index}`}
+                key={messageId}
               >
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-console-subdued">
-                  {item.role}
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-console-subdued">
+                    {item.role}
+                  </span>
+                  {item.role === "assistant" && item.content ? (
+                    <button
+                      aria-label="复制助手消息"
+                      className="inline-flex min-h-8 items-center gap-1 rounded-md border border-console-border px-2 text-xs text-console-subdued transition hover:bg-console-muted focus:outline-none focus:ring-2 focus:ring-console-accent"
+                      onClick={() => copyAssistantMessage(messageId, item.content)}
+                      type="button"
+                    >
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                      {copiedMessageId === messageId ? "已复制" : "复制"}
+                    </button>
+                  ) : null}
                 </div>
                 <div className="whitespace-pre-wrap">{item.content}</div>
               </article>
-            ))
+              );
+            })
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-console-subdued">
               选择或创建会话后开始提问。
@@ -311,6 +346,19 @@ export function ChatPage() {
         </div>
 
         <footer className="border-t border-console-border p-4">
+          <div className="mb-3 flex flex-wrap gap-2">
+            {PROMPT_EXAMPLES.map((example) => (
+              <button
+                className="min-h-10 rounded-md border border-console-border bg-console-bg px-3 py-2 text-left text-xs text-console-subdued transition hover:border-console-accent hover:text-console-text focus:outline-none focus:ring-2 focus:ring-console-accent"
+                disabled={isStreaming}
+                key={example}
+                onClick={() => setMessage(example)}
+                type="button"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-col gap-3 md:flex-row">
             <textarea
               className="field min-h-24 flex-1 resize-y"

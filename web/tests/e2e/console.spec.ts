@@ -8,7 +8,7 @@ async function mockBaseApi(page: Page) {
     route.fulfill({ json: { ok: true } })
   );
   await page.route(`${apiBase}/version`, (route) =>
-    route.fulfill({ json: { version: "0.15.0" } })
+    route.fulfill({ json: { version: "0.16.0" } })
   );
   await page.route(`${apiBase}/api/v1/chat/threads`, (route) => {
     if (route.request().method() === "GET") {
@@ -47,6 +47,28 @@ async function mockBaseApi(page: Page) {
         references: [],
         rerank_debug: [],
         retrieval_debug: {},
+      },
+    })
+  );
+  await page.route(`${apiBase}/api/v1/rag/metrics`, (route) =>
+    route.fulfill({
+      json: {
+        recent_events: [],
+        strategy_distribution: {},
+        summary: {
+          empty_reference_queries: 0,
+          failed_queries: 0,
+          success_queries: 0,
+          total_queries: 0,
+        },
+      },
+    })
+  );
+  await page.route(`${apiBase}/api/v1/knowledge/upload-policy`, (route) =>
+    route.fulfill({
+      json: {
+        allowed_extensions: [".txt"],
+        fully_supported_extensions: [".txt"],
       },
     })
   );
@@ -121,6 +143,19 @@ test("chat renders controlled SSE events without exposing raw tool data", async 
   await expect(page.getByRole("button", { name: "发送" })).toBeEnabled();
 });
 
+test("chat example prompt fills the input", async ({ page }) => {
+  await mockBaseApi(page);
+
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /循环前缀/ })
+    .click();
+
+  await expect(
+    page.getByPlaceholder("输入通信系统问题，例如 OFDM 参数、协议分析、RAG 检索等")
+  ).toHaveValue(/循环前缀/);
+});
+
 test("chat renders controlled SSE errors and stops loading", async ({ page }) => {
   await mockBaseApi(page);
   await page.route(`${apiBase}/api/v1/chat/thread_e2e/stream`, (route) =>
@@ -174,6 +209,83 @@ test("knowledge blocks management requests without an admin token", async ({
   expect(syncRequests).toBe(0);
 });
 
+test("knowledge blocks file upload without an admin token", async ({ page }) => {
+  await mockBaseApi(page);
+  let uploadRequests = 0;
+  await page.route(`${apiBase}/api/v1/knowledge/upload`, (route) => {
+    uploadRequests += 1;
+    return route.fulfill({ json: { result: "should not happen" } });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Knowledge" }).click();
+  await page.setInputFiles('input[type="file"]', {
+    buffer: Buffer.from("hello"),
+    mimeType: "text/plain",
+    name: "sample.txt",
+  });
+  await page.getByRole("button", { name: "上传文件" }).click();
+
+  await expect(page.getByText("请先配置本地管理 Token。")).toBeVisible();
+  expect(uploadRequests).toBe(0);
+});
+
+test("knowledge uploads a txt file through the API", async ({ page }) => {
+  await mockBaseApi(page);
+  let sawAuth = false;
+  await page.route(`${apiBase}/api/v1/knowledge/upload`, (route) => {
+    sawAuth = route.request().headers().authorization === "Bearer admin-token";
+    return route.fulfill({
+      json: {
+        filename: "sample.txt",
+        result: "✅ 已写入知识库。",
+        source_type: ".txt",
+      },
+    });
+  });
+
+  await page.goto("/", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.evaluate((key) => localStorage.setItem(key, "admin-token"), storageKey);
+  await page.reload();
+  await page.getByRole("button", { name: "Knowledge" }).click();
+  await page.setInputFiles('input[type="file"]', {
+    buffer: Buffer.from("通信知识"),
+    mimeType: "text/plain",
+    name: "sample.txt",
+  });
+  await page.getByRole("button", { name: "上传文件" }).click();
+
+  await expect(page.getByText("已写入知识库")).toBeVisible();
+  expect(sawAuth).toBe(true);
+});
+
+test("knowledge shows invalid upload errors", async ({ page }) => {
+  await mockBaseApi(page);
+  await page.route(`${apiBase}/api/v1/knowledge/upload`, (route) =>
+    route.fulfill({
+      json: { detail: { error: "不支持的文件类型。" } },
+      status: 400,
+    })
+  );
+
+  await page.goto("/", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.evaluate((key) => localStorage.setItem(key, "admin-token"), storageKey);
+  await page.reload();
+  await page.getByRole("button", { name: "Knowledge" }).click();
+  await page.setInputFiles('input[type="file"]', {
+    buffer: Buffer.from("binary"),
+    mimeType: "application/octet-stream",
+    name: "sample.exe",
+  });
+  await page.getByRole("button", { name: "上传文件" }).click();
+
+  await expect(page.getByText("不支持的文件类型。")).toBeVisible();
+});
+
 test("knowledge requires rollback confirmation before sending requests", async ({
   page,
 }) => {
@@ -195,4 +307,26 @@ test("knowledge requires rollback confirmation before sending requests", async (
 
   await expect(page.getByRole("button", { name: "确认回滚" })).toBeDisabled();
   expect(rollbackRequests).toBe(0);
+});
+
+test("rag metrics can refresh and reset with admin token", async ({ page }) => {
+  await mockBaseApi(page);
+  let resetRequests = 0;
+  await page.route(`${apiBase}/api/v1/rag/metrics/reset`, (route) => {
+    resetRequests += 1;
+    expect(route.request().headers().authorization).toBe("Bearer admin-token");
+    return route.fulfill({ json: { message: "已重置 RAG 运行指标。" } });
+  });
+
+  await page.goto("/", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.evaluate((key) => localStorage.setItem(key, "admin-token"), storageKey);
+  await page.reload();
+  await page.getByRole("button", { name: "RAG" }).click();
+  await page.getByRole("button", { name: "刷新指标" }).click();
+  await page.getByRole("button", { name: "重置" }).click();
+
+  await expect(page.getByText("total_queries")).toBeVisible();
+  expect(resetRequests).toBe(1);
 });

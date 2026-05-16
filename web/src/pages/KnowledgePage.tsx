@@ -1,5 +1,12 @@
-import { Archive, Database, RotateCcw, ShieldAlert, UploadCloud } from "lucide-react";
-import { useState } from "react";
+import {
+  Archive,
+  Database,
+  FileUp,
+  RotateCcw,
+  ShieldAlert,
+  UploadCloud,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { AdminTokenPanel } from "../components/AdminTokenPanel";
 import { Button } from "../components/Button";
@@ -76,6 +83,11 @@ export function KnowledgePage({
 }: KnowledgePageProps) {
   const [urls, setUrls] = useState("");
   const [operator, setOperator] = useState("web-console");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [allowedExtensions, setAllowedExtensions] = useState<string[]>([".txt"]);
+  const [fullySupportedExtensions, setFullySupportedExtensions] = useState<string[]>([
+    ".txt",
+  ]);
   const [snapshotTag, setSnapshotTag] = useState("");
   const [snapshotName, setSnapshotName] = useState("");
   const [confirmName, setConfirmName] = useState("");
@@ -84,6 +96,40 @@ export function KnowledgePage({
   const [loadingAction, setLoadingAction] = useState("");
   const rollbackReady =
     Boolean(snapshotName.trim()) && snapshotName.trim() === confirmName.trim();
+
+  useEffect(() => {
+    if (!adminToken) {
+      return;
+    }
+    api
+      .getKnowledgeUploadPolicy(adminToken)
+      .then((policy) => {
+        if (policy.allowed_extensions.length) {
+          setAllowedExtensions(policy.allowed_extensions);
+        }
+        if (policy.fully_supported_extensions.length) {
+          setFullySupportedExtensions(policy.fully_supported_extensions);
+        }
+      })
+      .catch(() => {
+        setAllowedExtensions([".txt"]);
+        setFullySupportedExtensions([".txt"]);
+      });
+  }, [adminToken]);
+
+  function validateUploadFile() {
+    if (!selectedFile) {
+      return "请先选择一个知识文件。";
+    }
+    const lowerName = selectedFile.name.toLowerCase();
+    if (
+      allowedExtensions.length &&
+      !allowedExtensions.some((extension) => lowerName.endsWith(extension))
+    ) {
+      return `不支持的文件类型。允许扩展名：${allowedExtensions.join(", ")}。`;
+    }
+    return "";
+  }
 
   async function runAction(
     actionName: string,
@@ -126,6 +172,50 @@ export function KnowledgePage({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
         <div className="space-y-4">
+          <section className="panel p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <FileUp className="h-5 w-5 text-console-accent" aria-hidden="true" />
+              <div>
+                <h1 className="text-base font-semibold">文件上传</h1>
+                <p className="text-xs text-console-subdued">
+                  允许扩展名：{allowedExtensions.join(", ")}；当前完整入库：
+                  {fullySupportedExtensions.join(", ")}。
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <input
+                accept={allowedExtensions.join(",")}
+                className="field file:mr-3 file:rounded-md file:border-0 file:bg-console-muted file:px-3 file:py-2 file:text-console-text"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+                type="file"
+              />
+              <Button
+                loading={loadingAction === "upload"}
+                onClick={() =>
+                  runAction(
+                    "upload",
+                    () =>
+                      api.uploadKnowledgeFile(
+                        selectedFile as File,
+                        operator,
+                        adminToken
+                      ),
+                    validateUploadFile
+                  )
+                }
+                variant="primary"
+              >
+                上传文件
+              </Button>
+            </div>
+            {selectedFile ? (
+              <p className="mt-2 text-xs text-console-subdued">
+                已选择：{selectedFile.name}（{selectedFile.size} bytes）
+              </p>
+            ) : null}
+          </section>
+
           <section className="panel p-4">
             <div className="mb-3 flex items-center gap-2">
               <UploadCloud className="h-5 w-5 text-console-accent" aria-hidden="true" />

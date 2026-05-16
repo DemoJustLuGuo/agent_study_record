@@ -1,5 +1,8 @@
 import type {
   KnowledgeActionResponse,
+  KnowledgeUploadPolicyResponse,
+  RagMetricsResetResponse,
+  RagMetricsResponse,
   RagQueryResponse,
   ThreadListResponse,
   ThreadOperationResponse,
@@ -43,7 +46,11 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const headers = new Headers(options.headers);
 
-  if (!headers.has("Content-Type") && options.body) {
+  if (
+    !headers.has("Content-Type") &&
+    options.body &&
+    !(options.body instanceof FormData)
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -87,7 +94,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ query }),
     }),
+  getRagMetrics: () => apiRequest<RagMetricsResponse>("/api/v1/rag/metrics"),
+  resetRagMetrics: (adminToken: string) =>
+    apiRequest<RagMetricsResetResponse>("/api/v1/rag/metrics/reset", {
+      method: "POST",
+      adminToken,
+    }),
 
+  getKnowledgeUploadPolicy: (adminToken: string) =>
+    apiRequest<KnowledgeUploadPolicyResponse>(
+      "/api/v1/knowledge/upload-policy",
+      { adminToken }
+    ),
+  uploadKnowledgeFile: (file: File, operator: string, adminToken: string) => {
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("operator", operator);
+    return apiRequest<KnowledgeActionResponse>("/api/v1/knowledge/upload", {
+      method: "POST",
+      body: formData,
+      adminToken,
+    });
+  },
   webIngest: (urls: string, operator: string, adminToken: string) =>
     apiRequest<KnowledgeActionResponse>("/api/v1/knowledge/web-ingest", {
       method: "POST",

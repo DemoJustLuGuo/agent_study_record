@@ -38,7 +38,7 @@ class KnowledgeService:
             normalized.append(ext)
         return tuple(normalized)
 
-    def upload_file(self, file_path: str, operator: str = "gradio") -> str:
+    def upload_file(self, file_path: str, operator: str = "api") -> str:
         if not file_path:
             return "请先上传知识文件。"
 
@@ -61,7 +61,7 @@ class KnowledgeService:
         if not text.strip():
             return "文件内容为空。"
 
-        user = (operator or "gradio").strip() or "gradio"
+        user = (operator or "api").strip() or "api"
         try:
             result = self.knowledge_base.upload_by_str(text, source.name, operator=user)
         except Exception:
@@ -70,12 +70,12 @@ class KnowledgeService:
 
         return f"✅ {result}"
 
-    def ingest_web_urls(self, urls_text: str, operator: str = "gradio") -> dict[str, Any]:
+    def ingest_web_urls(self, urls_text: str, operator: str = "api") -> dict[str, Any]:
         urls = parse_web_urls(urls_text)
         if not urls:
             return {"error": "请先输入至少一个 HTTP/HTTPS 链接。"}
 
-        user = (operator or "gradio").strip() or "gradio"
+        user = (operator or "api").strip() or "api"
         try:
             logger.info("[rag] web ingest start urls=%s operator=%s", len(urls), user)
             result = self.knowledge_base.upsert_web_urls(urls=urls, operator=user)

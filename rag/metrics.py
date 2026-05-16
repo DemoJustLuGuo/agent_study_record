@@ -44,6 +44,25 @@ def reset_rag_metrics() -> str:
     return "已重置 RAG 运行指标。"
 
 
+def get_rag_metrics_snapshot() -> dict[str, Any]:
+    with _lock:
+        events = list(_window)
+        summary = dict(_summary)
+
+    by_strategy: dict[str, int] = {}
+    for item in events:
+        strategy = str(item.get("strategy", "unknown") or "unknown")
+        by_strategy[strategy] = by_strategy.get(strategy, 0) + 1
+
+    return {
+        "summary": summary,
+        "strategy_distribution": dict(
+            sorted(by_strategy.items(), key=lambda kv: kv[1], reverse=True)
+        ),
+        "recent_events": events[-20:],
+    }
+
+
 def get_rag_metrics_markdown() -> str:
     with _lock:
         events = list(_window)

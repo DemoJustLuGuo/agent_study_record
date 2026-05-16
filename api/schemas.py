@@ -63,6 +63,16 @@ class RagQueryResponse(ResponseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
 
 
+class RagMetricsResponse(ResponseModel):
+    summary: dict[str, Any] = Field(default_factory=dict)
+    strategy_distribution: dict[str, int] = Field(default_factory=dict)
+    recent_events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class RagMetricsResetResponse(ResponseModel):
+    message: str
+
+
 class KnowledgeActionDetail(ResponseModel):
     url: str = ""
     status: str = ""
@@ -74,6 +84,8 @@ class KnowledgeActionResponse(ResponseModel):
     result: str | None = None
     snapshot: str | None = None
     error: str | None = None
+    filename: str | None = None
+    source_type: str | None = None
     total: int | None = None
     added: int | None = None
     updated: int | None = None
@@ -82,6 +94,11 @@ class KnowledgeActionResponse(ResponseModel):
     details: list[KnowledgeActionDetail] = Field(default_factory=list)
     removed_source_count: int | None = None
     removed_sources: list[str] = Field(default_factory=list)
+
+
+class KnowledgeUploadPolicyResponse(ResponseModel):
+    allowed_extensions: list[str] = Field(default_factory=list)
+    fully_supported_extensions: list[str] = Field(default_factory=list)
 
 
 class TraceListItem(BaseModel):

@@ -6,13 +6,15 @@
 
 - 项目类型：通信系统智能体 Web 工作台。
 - 主要用途：提供通信领域 ReAct Agent 对话、RAG 检索问答、知识库生命周期管理、长期/短期记忆和工具调用追踪。
-- 运行形态：Gradio Web UI，入口为 `python -m app.main`，默认监听 `127.0.0.1:7860`。
+- 运行形态：FastAPI 后端 + React Web 控制台。后端入口为 `python -m api.main`，默认监听 `127.0.0.1:8000`；前端入口为 `cd web && npm run dev`。
 - 领域角色：Communication Engineer Agent，面向无线通信、协议分析、信号处理、网络故障定位、工程参数评估等任务。
 
 核心目录：
 
 ```text
-app/                    # Gradio UI、回调、会话线程管理
+api/                    # FastAPI 后端控制面
+services/               # 聊天、知识库、RAG、trace 等业务服务
+web/                    # React + TypeScript + Tailwind 前端控制台
 agent/                  # ReactAgent、中间件、工具注册与工具实现
 rag/                    # Chroma 向量库、RAG、知识库生命周期、长期记忆
 model/                  # ChatOpenAI / OpenAIEmbeddings 工厂
@@ -28,7 +30,8 @@ rag/config/             # Chroma、检索、分块、网页入库配置
 以 `requirements.txt` 为准，当前关键栈：
 
 - Python 3.10+
-- Gradio 5.49.1
+- FastAPI
+- React + TypeScript + Tailwind
 - LangChain 1.2.11
 - LangChain Core 1.2.18
 - LangGraph 1.1.0
@@ -96,17 +99,15 @@ python -m pip install -r requirements.txt
 $env:OPENAI_API_KEY = "<从安全渠道取得的真实密钥>"
 $env:SILICONFLOW_API_KEY = $env:OPENAI_API_KEY
 $env:LOG_LEVEL = "INFO"
-python -m app.main
+python -m api.main
 ```
 
-可选启动脚本：
+前端控制台：
 
 ```powershell
-.\Launch.ps1
-```
-
-```bat
-launch.bat
+cd web
+npm install
+npm run dev
 ```
 
 调试 Agent 决策链时使用：
@@ -114,7 +115,7 @@ launch.bat
 ```powershell
 $env:LANGCHAIN_DEBUG = "1"
 $env:APP_DEBUG = "1"
-python -m app.main
+python -m api.main
 ```
 
 ### 知识库与向量生命周期
@@ -136,7 +137,7 @@ python rag/vector_store.py rollback <snapshot_dir_name>
 
 ```powershell
 python -m black agent app rag model utils
-python -m compileall -q agent app rag model utils
+python -m compileall -q agent rag model utils services api
 ```
 
 只修改少量 Python 文件时，Black 命令必须限定到本次改动文件，例如：
@@ -153,21 +154,21 @@ python -m black agent/tools/modules/protocol_tools.py agent/tools/registry.py
 
 ```powershell
 python -m pytest tests -q
-python -m compileall -q agent app rag model utils
+python -m compileall -q agent rag model utils services api
 ```
 
 按变更类型执行附加验证：
 
 - Agent/工具变更：测试工具 `args_schema` 校验、成功返回、失败返回、注册表可发现；必要时用 `ReactAgent` mock 模型验证路由。
 - RAG/向量库变更：测试分块、metadata、同 MD5 多来源、删除源文件同步、snapshot/rollback；禁止直接依赖真实线上密钥。
-- UI 回调变更：测试 `app/runtime.py` 的纯函数和回调返回结构，确认 Gradio update 对象字段不破坏现有页面。
+- API/UI 变更：测试 FastAPI 响应契约、前端 mock E2E 和关键交互状态，确认不会破坏现有控制台页面。
 - 配置变更：测试缺失键、非法类型、环境变量密钥解析、启动期错误信息。
-- 文档变更：至少运行 `python -m compileall -q agent app rag model utils`，确认没有误改代码；检查命令与真实入口一致。
+- 文档变更：至少运行 `python -m compileall -q agent rag model utils services api`，确认没有误改代码；检查命令与真实入口一致。
 
 验收标准：
 
 - 所有新增/修改 Python 文件已执行 Black。
-- `python -m compileall -q agent app rag model utils` 通过。
+- `python -m compileall -q agent rag model utils services api` 通过。
 - 与本次变更相关的 `pytest` 用例通过；若测试无法运行，必须在最终说明中写明原因和残余风险。
 - 不引入明文密钥、绝对本机路径、运行时数据库、日志或向量库二进制到提交内容。
 - Agent 工具名称、注册表、提示词授权、README/开发规范说明保持一致。
@@ -183,8 +184,8 @@ python -m compileall -q agent app rag model utils
 | `langchain-rag` | 检索返回数量符合配置；references metadata 已脱敏；空知识库或低命中时返回可解释结果；分块参数变更不破坏入库 |
 | `langgraph-persistence` | 相同 `thread_id` 能恢复会话状态；不同 `thread_id` 状态隔离；关闭会话后不会误删其他会话 DB |
 | `langgraph-human-in-the-loop` / `langchain-middleware` | 高风险工具或 rollback 操作必须经过显式审批开关；拒绝审批时不执行副作用 |
-| `langchain-dependencies` | `requirements.txt` 中新增依赖可安装；关键版本不破坏 `python -m compileall -q agent app rag model utils` |
-| Deep Agents 相关 skills | 必须证明不改变现有 Gradio 入口；新增能力应有单独配置开关和回退路径 |
+| `langchain-dependencies` | `requirements.txt` 中新增依赖可安装；关键版本不破坏 `python -m compileall -q agent rag model utils services api` |
+| Deep Agents 相关 skills | 必须证明不改变现有 FastAPI/React 入口；新增能力应有单独配置开关和回退路径 |
 
 测试命名建议：
 
@@ -363,7 +364,7 @@ _write_trace(
 - 删除或重建 `chroma_db/`、`memory_db/`、`logs/`、`chroma_manifest.json`、`md5.text`、`rag/data/`。
 - 执行 `git reset --hard`、`git checkout -- <file>`、批量删除、强制清理未跟踪文件。
 - 执行 `rag/vector_store.py rollback` 或删除快照，除非用户明确指定快照和目的。
-- 把 Gradio 服务改为默认 `0.0.0.0` 暴露，除非同时补充鉴权和用户明确要求。
+- 把 FastAPI 服务改为默认 `0.0.0.0` 暴露，除非同时补充鉴权和用户明确要求。
 - 放宽 `.gitignore` 以纳入日志、向量库、会话 DB、缓存或密钥文件。
 - 引入新的 LLM provider、数据库、前端框架或大型依赖，除非需求明确且说明迁移成本。
 - 绕过 `agent/tools/registry.py` 私自让 Agent 调用未注册工具。
@@ -461,11 +462,11 @@ PR 必须包含：
 2. 用临时测试目录或 mock Chroma，避免测试污染真实向量库。
 3. 覆盖新增、更新、删除、重复内容、多来源同 MD5、回滚失败等场景。
 4. 前端 references 只展示脱敏 metadata，不暴露服务器绝对路径。
-5. 执行 `python -m pytest tests -q` 和 `python -m compileall -q agent app rag model utils`。
+5. 执行 `python -m pytest tests -q` 和 `python -m compileall -q agent rag model utils services api`。
 
 ### 修改配置或启动链路
 
-1. 保持 `launch.bat`、`Launch.ps1`、README、AGENTS 命令一致。
+1. 保持 README、AGENTS 和实际启动入口命令一致。
 2. 配置新增字段必须有默认值、校验逻辑和失败提示。
 3. 密钥只允许使用环境变量名或运行时环境变量，不写真实值。
 4. 执行启动前置检查：配置读取、模型工厂初始化、compileall。

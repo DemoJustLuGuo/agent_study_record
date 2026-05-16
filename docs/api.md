@@ -1,20 +1,19 @@
 # 后端 API 契约说明
 
-本文档记录当前 FastAPI 后端的第一版响应契约。`api.main` 是正式后端控制面，`app.main` 保留为旧 Gradio UI / 本地调试入口：
+本文档记录当前 FastAPI 后端响应契约。`api.main` 是正式后端控制面，React 控制台通过该 API 完成 Chat、RAG、Knowledge 和 Trace 工作流：
 
 ```powershell
-venv\Scripts\python.exe -m app.main
 venv\Scripts\python.exe -m api.main
 ```
 
-`api.main` 默认监听 `127.0.0.1:8000`。Gradio 默认监听 `127.0.0.1:7860`，但默认不展示 Gradio API，也不通过 Gradio API 暴露 UI 回调。若需要本地调试 Gradio API 文档，可显式设置：
+`api.main` 默认监听 `127.0.0.1:8000`。React 控制台默认通过 `VITE_API_BASE_URL=http://127.0.0.1:8000` 访问后端：
 
 ```powershell
-$env:GRADIO_SHOW_API = "1"
-venv\Scripts\python.exe -m app.main
+cd web
+npm run dev
 ```
 
-对外集成、管理操作和新前端对接应使用 FastAPI。管理类接口需要在运行环境设置 `APP_ADMIN_TOKEN`，请求时使用：
+对外集成、管理操作和前端对接均使用 FastAPI。管理类接口需要在运行环境设置 `APP_ADMIN_TOKEN`，请求时使用：
 
 ```text
 Authorization: Bearer <APP_ADMIN_TOKEN>
@@ -36,7 +35,7 @@ Authorization: Bearer <APP_ADMIN_TOKEN>
 
 ```json
 {
-  "version": "0.15.0"
+  "version": "0.16.0"
 }
 ```
 
@@ -82,7 +81,16 @@ FastAPI `HTTPException.detail` 使用统一对象：
 
 ### POST `/api/v1/chat/threads`
 
-创建新会话。响应包含 `thread_id`、`threads`、`choices`、`history`、`status`。`choices` 是兼容旧 Gradio 选择器的 `[label, value]` 元组列表，前端新实现可优先使用 `threads`。
+创建新会话。响应包含 `thread_id`、`threads`、`history`、`status`，不再返回旧 UI 选择器兼容字段。
+
+```json
+{
+  "thread_id": "thread_2",
+  "threads": [],
+  "history": [],
+  "status": "当前会话：..."
+}
+```
 
 ### GET `/api/v1/chat/threads/{thread_id}`
 
@@ -218,6 +226,42 @@ event: error
 }
 ```
 
+### GET `/api/v1/rag/metrics`
+
+返回当前进程内 RAG 运行指标窗口，供控制台刷新展示。
+
+```json
+{
+  "summary": {
+    "total_queries": 1,
+    "success_queries": 1,
+    "failed_queries": 0,
+    "empty_reference_queries": 0
+  },
+  "strategy_distribution": {
+    "vector": 1
+  },
+  "recent_events": [
+    {
+      "ts": "2026-05-15 12:00:00",
+      "ok": true,
+      "strategy": "vector",
+      "reference_count": 2
+    }
+  ]
+}
+```
+
+### POST `/api/v1/rag/metrics/reset`
+
+需要 Admin Token。清空当前进程内 RAG 指标窗口。
+
+```json
+{
+  "message": "已重置 RAG 运行指标。"
+}
+```
+
 响应：
 
 ```json
@@ -242,6 +286,36 @@ event: error
 ## Knowledge API
 
 以下接口均需要 Admin Token。
+
+### GET `/api/v1/knowledge/upload-policy`
+
+返回当前上传入口可接受的扩展名，以及第一版已完整接入的扩展名。
+
+```json
+{
+  "allowed_extensions": [".txt"],
+  "fully_supported_extensions": [".txt"]
+}
+```
+
+### POST `/api/v1/knowledge/upload`
+
+使用 `multipart/form-data` 上传知识文件。
+
+字段：
+
+- `file`：待上传文件。
+- `operator`：操作人标识。
+
+响应只返回文件名、来源类型和结果，不返回服务器临时路径或绝对路径。
+
+```json
+{
+  "filename": "demo.txt",
+  "source_type": ".txt",
+  "result": "✅ 已写入知识库。"
+}
+```
 
 ### POST `/api/v1/knowledge/web-ingest`
 

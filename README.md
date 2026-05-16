@@ -1,6 +1,6 @@
 # 通信系统智能体项目（Agent + RAG）
 
-这是一个基于 `LangChain + LangGraph + Gradio + ChromaDB` 的通信领域智能体项目，支持 ReAct 工具调用、知识库检索增强（RAG）、长时记忆，以及知识库生命周期管理（同步/快照/回滚）。
+这是一个基于 `LangChain + LangGraph + FastAPI + React + ChromaDB` 的通信领域智能体项目，支持 ReAct 工具调用、知识库检索增强（RAG）、长时记忆，以及知识库生命周期管理（上传/同步/快照/回滚）。
 
 ## 核心能力
 
@@ -57,13 +57,7 @@ npm run dev
 
 默认后端地址：`http://127.0.0.1:8000`。默认前端地址：`http://127.0.0.1:5173`。
 
-Gradio 旧 UI / 本地调试入口：
-
-```powershell
-venv\Scripts\python.exe -m app.main
-```
-
-仓库不再提供 `Launch.ps1` / `launch.bat` 一键启动脚本。前后端启动均使用上面的显式命令；如需调试 Gradio API 文档，可在启动前设置 `GRADIO_SHOW_API=1`。
+仓库不再提供 `Launch.ps1` / `launch.bat` 一键启动脚本。前后端启动均使用上面的显式命令。
 
 日志等级可通过环境变量 `LOG_LEVEL` 控制（`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`）。
 
@@ -74,7 +68,6 @@ venv\Scripts\python.exe -m app.main
 agent_study_record/
 ├─ web/                    # React + TypeScript + Tailwind 前端控制台
 ├─ api/                    # FastAPI 正式后端控制面
-├─ app/                    # Gradio UI（app_builder/runtime/ui/*）与启动入口
 ├─ agent/                  # ReactAgent、middleware、tools
 ├─ rag/                    # 向量库/RAG/知识库/记忆服务
 ├─ model/                  # ChatModel 与 Embedding 工厂
@@ -107,11 +100,9 @@ agent_study_record/
 - `store_memory`
 - `search_memory`
 
-## Gradio 页面与 FastAPI 控制面
+## FastAPI 控制面与 React 前端
 
 - `cd web && npm run dev` 启动的是 React/TS/Tailwind 前端控制台，覆盖 Chat、RAG、Knowledge、Traces 日常工作流。
-- `venv\Scripts\python.exe -m app.main` 启动的是旧 Gradio UI / 本地调试入口，默认不展示 Gradio API，也不通过 Gradio API 暴露 UI 回调。
-- 如需调试 Gradio API 文档，可在本地显式设置 `GRADIO_SHOW_API=1` 后启动 Gradio。
 - `venv\Scripts\python.exe -m api.main` 启动的是正式 FastAPI 后端控制面，外部集成、新前端对接、聊天 SSE、RAG 查询、知识库管理和 trace 查询都应使用 FastAPI。
 - FastAPI 管理类接口使用 `APP_ADMIN_TOKEN` 鉴权；模型连接地址和真实 API Key 只通过 `.env` 或系统环境变量管理，不通过 Web UI 或 API 写入。
 
@@ -126,7 +117,7 @@ python rag/vector_store.py rollback <snapshot_name>
 
 ## 本地运行数据移除
 
-仓库不再提供 `Remove-Logs.ps1` / `Remove-RagDB.ps1` 清理脚本。需要清理本地运行数据时，先停止后端、前端和 Gradio 进程，再按目标执行显式命令。
+仓库不再提供 `Remove-Logs.ps1` / `Remove-RagDB.ps1` 清理脚本。需要清理本地运行数据时，先停止后端和前端进程，再按目标执行显式命令。
 
 清理日志与 trace：
 

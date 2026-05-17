@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Server } from "lucide-react";
+import { Activity, AlertTriangle, Server, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, API_BASE_URL } from "../api/client";
 
@@ -47,18 +47,30 @@ export function StatusBar() {
     };
   }, []);
 
+  const handleAdminClick = () => {
+    window.history.pushState({}, "", "/admin");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-console-border bg-console-surface/80 px-4 py-3 backdrop-blur md:px-6">
       <div className="flex items-center gap-3">
         <Server className="h-5 w-5 text-console-accent" aria-hidden="true" />
         <div>
           <div className="text-sm font-semibold text-console-text">
-            通信智能体工程控制台
+            通信智能体工作台
           </div>
           <div className="text-xs text-console-subdued">{API_BASE_URL}</div>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={handleAdminClick}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md hover:bg-console-muted transition"
+        >
+          <Shield className="h-4 w-4" aria-hidden="true" />
+          <span>管理中心</span>
+        </button>
         <span className="status-pill">
           {status.ok ? (
             <Activity className="h-4 w-4 text-console-accent" aria-hidden="true" />

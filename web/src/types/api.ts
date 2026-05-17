@@ -152,6 +152,29 @@ export type TraceDetailResponse = {
   events: Record<string, unknown>[];
 };
 
+export type AdminSessionResponse = {
+  ok: boolean;
+  role: string;
+};
+
+export type AdminTokenUpdateResponse = {
+  updated: boolean;
+  restart_required: boolean;
+  message: string;
+};
+
+export type RagConfigResponse = {
+  config: Record<string, unknown>;
+  default_config: Record<string, unknown>;
+  schema_info: Record<string, unknown>;
+};
+
+export type RagConfigUpdateResponse = {
+  updated: boolean;
+  restart_required: boolean;
+  warnings: string[];
+};
+
 export type ApiErrorPayload = {
   detail?: {
     error?: string;

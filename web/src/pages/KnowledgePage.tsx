@@ -54,7 +54,7 @@ function ResultPanel({ result }: { result: KnowledgeActionResponse | null }) {
 
   return (
     <div className="space-y-3 text-sm">
-      <pre className="max-h-72 overflow-auto rounded-md bg-black/30 p-3 text-xs">
+      <pre className="max-h-72 overflow-auto rounded-xl bg-black/40 p-4 text-xs shadow-inner border border-white/5">
         {JSON.stringify(result, null, 2)}
       </pre>
       {result.details?.length ? (
@@ -163,6 +163,23 @@ export function KnowledgePage({
         source={adminTokenSource}
         onChange={onAdminTokenChange}
       />
+
+      <div className="panel p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-console-accent">
+              知识库集合
+            </p>
+            <h1 className="mt-2 text-2xl font-semibold text-console-text">
+              知识库集合
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-console-subdued">
+              第一阶段保留现有全局知识库管理能力，同时把页面归入“知识库集合”栏目。后续将在这里扩展集合、文件处理状态和智能体绑定范围。
+            </p>
+          </div>
+          <span className="status-pill">当前：全局知识库</span>
+        </div>
+      </div>
 
       {error ? (
         <div className="rounded-md border border-console-danger/50 bg-console-danger/10 p-3 text-sm text-red-100">

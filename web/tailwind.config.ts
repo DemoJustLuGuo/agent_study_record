@@ -6,11 +6,11 @@ export default {
     extend: {
       colors: {
         console: {
-          bg: "#020617",
-          surface: "#0f172a",
-          panel: "#111827",
-          muted: "#1e293b",
-          border: "#334155",
+          bg: "#0f172a",
+          surface: "#1e293b",
+          panel: "#1e293b",
+          muted: "#334155",
+          border: "#475569",
           text: "#f8fafc",
           subdued: "#94a3b8",
           accent: "#22c55e",
@@ -19,11 +19,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["Fira Code", "ui-monospace", "SFMono-Regular", "monospace"],
+        sans: ["'Nunito Sans'", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["'Fira Code'", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {
-        panel: "0 18px 45px rgba(2, 6, 23, 0.36)",
+        panel: "0 20px 40px -10px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(255, 255, 255, 0.05) inset",
       },
     },
   },

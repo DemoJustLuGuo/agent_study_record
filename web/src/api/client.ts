@@ -9,6 +9,10 @@ import type {
   ThreadStateResponse,
   TraceDetailResponse,
   TraceListResponse,
+  RagConfigResponse,
+  RagConfigUpdateResponse,
+  AdminSessionResponse,
+  AdminTokenUpdateResponse,
   ApiErrorPayload,
 } from "../types/api";
 
@@ -16,7 +20,7 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
   "http://127.0.0.1:8000";
 
-export const DEFAULT_ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || "";
+export const DEFAULT_ADMIN_TOKEN = "";
 
 type RequestOptions = RequestInit & {
   adminToken?: string;
@@ -68,6 +72,16 @@ export async function apiRequest<T>(
 export const api = {
   health: () => apiRequest<{ ok: boolean }>("/health"),
   version: () => apiRequest<{ version: string }>("/version"),
+  adminSession: (adminToken: string) =>
+    apiRequest<AdminSessionResponse>("/api/v1/admin/session", {
+      adminToken,
+    }),
+  updateAdminToken: (newToken: string, adminToken: string) =>
+    apiRequest<AdminTokenUpdateResponse>("/api/v1/admin/token", {
+      method: "PUT",
+      body: JSON.stringify({ new_token: newToken }),
+      adminToken,
+    }),
 
   listThreads: () => apiRequest<ThreadListResponse>("/api/v1/chat/threads"),
   createThread: () =>
@@ -153,6 +167,16 @@ export const api = {
     }),
   getTrace: (traceId: string, adminToken: string) =>
     apiRequest<TraceDetailResponse>(`/api/v1/traces/${traceId}`, {
+      adminToken,
+    }),
+  getRagConfig: (adminToken: string) =>
+    apiRequest<RagConfigResponse>("/api/v1/rag/config", {
+      adminToken,
+    }),
+  updateRagConfig: (config: Record<string, unknown>, adminToken: string) =>
+    apiRequest<RagConfigUpdateResponse>("/api/v1/rag/config", {
+      method: "PUT",
+      body: JSON.stringify({ config }),
       adminToken,
     }),
 };

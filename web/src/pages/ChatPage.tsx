@@ -7,6 +7,8 @@ import {
   Send,
   Trash2,
   Wrench,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
@@ -51,6 +53,7 @@ export function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [tools, setTools] = useState<ToolLog[]>([]);
   const [copiedMessageId, setCopiedMessageId] = useState("");
+  const [showTools, setShowTools] = useState(true);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.thread_id === threadId),
@@ -275,7 +278,7 @@ export function ChatPage() {
             </h1>
             <p className="text-xs text-console-subdued">{status}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               className="field w-48"
               placeholder="新会话名"
@@ -296,6 +299,15 @@ export function ChatPage() {
             >
               关闭
             </Button>
+            <div className="w-px h-6 bg-console-border mx-1" />
+            <Button
+              icon={showTools ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+              onClick={() => setShowTools(!showTools)}
+              variant="ghost"
+              title={showTools ? "隐藏工具事件" : "显示工具事件"}
+            >
+              {showTools ? "收起" : "展开"}
+            </Button>
           </div>
         </header>
 
@@ -311,10 +323,10 @@ export function ChatPage() {
               const messageId = `${item.role}-${index}`;
               return (
               <article
-                className={`max-w-[85%] rounded-lg border px-4 py-3 text-sm leading-6 ${
+                className={`max-w-[85%] rounded-2xl border px-5 py-4 text-sm leading-relaxed shadow-sm ${
                   item.role === "user"
-                    ? "ml-auto border-console-accent/40 bg-console-accent/10"
-                    : "border-console-border bg-console-bg"
+                    ? "ml-auto border-console-accent/30 bg-console-accent/10"
+                    : "border-white/10 bg-white/5 backdrop-blur-md"
                 }`}
                 key={messageId}
               >
@@ -349,7 +361,7 @@ export function ChatPage() {
           <div className="mb-3 flex flex-wrap gap-2">
             {PROMPT_EXAMPLES.map((example) => (
               <button
-                className="min-h-10 rounded-md border border-console-border bg-console-bg px-3 py-2 text-left text-xs text-console-subdued transition hover:border-console-accent hover:text-console-text focus:outline-none focus:ring-2 focus:ring-console-accent"
+                className="min-h-10 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-console-subdued transition-all hover:border-console-accent/50 hover:bg-white/10 hover:text-console-text focus:outline-none focus:ring-2 focus:ring-console-accent active:scale-[0.98]"
                 disabled={isStreaming}
                 key={example}
                 onClick={() => setMessage(example)}
@@ -362,7 +374,7 @@ export function ChatPage() {
           <div className="flex flex-col gap-3 md:flex-row">
             <textarea
               className="field min-h-24 flex-1 resize-y"
-              placeholder="输入通信系统问题，例如 OFDM 参数、协议分析、RAG 检索等"
+              placeholder="输入通信系统问题，例如 OFDM 参数、协议分析、知识库检索等"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               onKeyDown={(event) => {
@@ -390,33 +402,38 @@ export function ChatPage() {
         </footer>
       </div>
 
-      <aside className="panel p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <Wrench className="h-4 w-4 text-console-accent" aria-hidden="true" />
-          工具事件
-        </div>
-        <div className="space-y-3">
-          {tools.length ? (
-            tools.map((tool) => (
-              <div className="rounded-md border border-console-border bg-console-bg p-3" key={tool.id}>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">{tool.tool}</span>
-                  <span className="status-pill">{tool.phase}</span>
-                </div>
-                {tool.text ? <p className="text-xs text-console-subdued">{tool.text}</p> : null}
-                {tool.args ? <pre className="mt-2 overflow-auto rounded bg-black/30 p-2 text-xs">{tool.args}</pre> : null}
-                {tool.result ? <pre className="mt-2 overflow-auto rounded bg-black/30 p-2 text-xs">{tool.result}</pre> : null}
-                {tool.error ? <p className="mt-2 text-xs text-red-200">{tool.error}</p> : null}
-              </div>
-            ))
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-console-subdued">
-              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              暂无工具事件。
+      {showTools && (
+        <aside className="panel p-4 h-full xl:max-h-[calc(100vh-8rem)] overflow-y-auto">
+          <div className="mb-3 flex items-center justify-between gap-2 text-sm font-semibold sticky top-0 bg-console-surface/80 backdrop-blur pb-2">
+            <div className="flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-console-accent" aria-hidden="true" />
+              工具事件
             </div>
-          )}
-        </div>
-      </aside>
+            <span className="text-xs font-normal text-console-subdued">{tools.length}</span>
+          </div>
+          <div className="space-y-3">
+            {tools.length ? (
+              tools.map((tool) => (
+                <div className="rounded-md border border-console-border bg-console-bg p-3" key={tool.id}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{tool.tool}</span>
+                    <span className="status-pill">{tool.phase}</span>
+                  </div>
+                  {tool.text ? <p className="text-xs text-console-subdued">{tool.text}</p> : null}
+                  {tool.args ? <pre className="mt-2 overflow-auto rounded bg-black/30 p-2 text-xs">{tool.args}</pre> : null}
+                  {tool.result ? <pre className="mt-2 overflow-auto rounded bg-black/30 p-2 text-xs">{tool.result}</pre> : null}
+                  {tool.error ? <p className="mt-2 text-xs text-red-200">{tool.error}</p> : null}
+                </div>
+              ))
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-console-subdued">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                暂无工具事件。
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
     </section>
   );
 }

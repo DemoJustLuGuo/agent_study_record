@@ -16,8 +16,8 @@ export function AdminTokenPanel({ token, source, onChange }: AdminTokenPanelProp
           本地管理 Token
         </div>
         <p className="max-w-3xl text-xs leading-5 text-console-subdued">
-          管理接口仍由后端 APP_ADMIN_TOKEN 鉴权。前端只负责把本机 token 保存在
-          localStorage 或读取 VITE_ADMIN_TOKEN，避免每次操作重复输入。
+          管理接口由后端 APP_ADMIN_TOKEN 鉴权。前端只保存你输入的本机 token，
+          不读取后端 .env，也不会把真实 token 打包进浏览器代码。
         </p>
       </div>
       <div className="flex w-full flex-col gap-2 md:w-[28rem] md:flex-row">
@@ -32,7 +32,7 @@ export function AdminTokenPanel({ token, source, onChange }: AdminTokenPanelProp
           清除
         </Button>
       </div>
-      <span className="status-pill self-start md:self-center">source: {source}</span>
+      <span className="status-pill self-start md:self-center">来源：{source}</span>
     </div>
   );
 }

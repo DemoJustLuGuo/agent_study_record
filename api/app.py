@@ -10,7 +10,7 @@ from utils.env_loader import load_project_dotenv
 
 load_project_dotenv()
 
-from api.routers import chat, knowledge, rag, traces
+from api.routers import admin, chat, knowledge, rag, traces
 from api.schemas import HealthResponse, VersionResponse
 from api.version import API_VERSION
 
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
         return {"version": app.version}
 
     app.include_router(chat.create_router())
+    app.include_router(admin.create_router())
     app.include_router(rag.create_router())
     app.include_router(knowledge.create_router())
     app.include_router(traces.create_router())

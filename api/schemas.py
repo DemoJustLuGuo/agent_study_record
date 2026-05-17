@@ -114,3 +114,34 @@ class TraceListResponse(BaseModel):
 class TraceDetailResponse(BaseModel):
     trace_id: str
     events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AdminSessionResponse(ResponseModel):
+    ok: bool
+    role: str = "admin"
+
+
+class AdminTokenUpdateRequest(BaseModel):
+    new_token: str = Field(min_length=12, max_length=256)
+
+
+class AdminTokenUpdateResponse(ResponseModel):
+    updated: bool
+    restart_required: bool = False
+    message: str = ""
+
+
+class RagConfigResponse(BaseModel):
+    config: dict[str, Any]
+    default_config: dict[str, Any] = Field(default_factory=dict)
+    schema_info: dict[str, Any] = Field(default_factory=dict)
+
+
+class RagConfigUpdateRequest(BaseModel):
+    config: dict[str, Any]
+
+
+class RagConfigUpdateResponse(BaseModel):
+    updated: bool
+    restart_required: bool
+    warnings: list[str] = Field(default_factory=list)

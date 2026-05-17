@@ -11,6 +11,8 @@ from services.chat_service import ChatService
 from services.knowledge_service import KnowledgeService
 from services.rag_query_service import RagQueryService
 from services.trace_service import TraceService
+from services.rag_config_service import RagConfigService
+from services.admin_token_service import AdminTokenService
 
 _chat_service: ChatService | None = None
 _chat_service_lock = Lock()
@@ -20,6 +22,10 @@ _rag_query_service: RagQueryService | None = None
 _rag_query_service_lock = Lock()
 _trace_service: TraceService | None = None
 _trace_service_lock = Lock()
+_rag_config_service: RagConfigService | None = None
+_rag_config_service_lock = Lock()
+_admin_token_service: AdminTokenService | None = None
+_admin_token_service_lock = Lock()
 
 
 def _extract_bearer(authorization: str | None) -> str:
@@ -76,3 +82,19 @@ def get_trace_service() -> TraceService:
         if _trace_service is None:
             _trace_service = TraceService()
         return _trace_service
+
+
+def get_rag_config_service() -> RagConfigService:
+    global _rag_config_service
+    with _rag_config_service_lock:
+        if _rag_config_service is None:
+            _rag_config_service = RagConfigService()
+        return _rag_config_service
+
+
+def get_admin_token_service() -> AdminTokenService:
+    global _admin_token_service
+    with _admin_token_service_lock:
+        if _admin_token_service is None:
+            _admin_token_service = AdminTokenService()
+        return _admin_token_service

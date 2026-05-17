@@ -2,7 +2,7 @@ collection_name: agent
 persist_directory: chroma_db
 k: 3
 retrieval:
-  top_k: 3
+  top_k: 5
   final_k: 3
   vector_k: 8
   keyword_k: 8
@@ -32,19 +32,37 @@ data_path: rag/data
 md5_hex_store: md5.text
 index_manifest_store: chroma_manifest.json
 lifecycle_snapshot_dir: chroma_snapshots
-allowed_knowledge_file_type: ["txt", "pdf", "md", "docx", "html", "htm", "csv"]
+allowed_knowledge_file_type:
+- txt
+- pdf
+- md
+- docx
+- html
+- htm
+- csv
 auto_sync_on_init: false
 auto_sync_before_retrieval: false
 auto_sync_min_interval_seconds: 15
 document_loader:
   loader_priority:
-    pdf: ["pypdf"]
-    txt: ["text"]
-    md: ["unstructured_markdown", "text"]
-    docx: ["unstructured_docx", "text"]
-    html: ["unstructured_html", "text"]
-    htm: ["unstructured_html", "text"]
-    csv: ["csv"]
+    pdf:
+    - pypdf
+    txt:
+    - text
+    md:
+    - unstructured_markdown
+    - text
+    docx:
+    - unstructured_docx
+    - text
+    html:
+    - unstructured_html
+    - text
+    htm:
+    - unstructured_html
+    - text
+    csv:
+    - csv
   pdf:
     pypdf_mode: page
     pypdf_extraction_mode: layout
@@ -52,62 +70,75 @@ web_source:
   timeout_seconds: 20
   min_content_chars: 80
   max_content_chars: 50000
-  user_agent: "Mozilla/5.0 (compatible; AgentStudyRAG/1.0; +https://example.local)"
+  user_agent: Mozilla/5.0 (compatible; AgentStudyRAG/1.0; +https://example.local)
   security:
     reject_private_ips: true
     reject_localhost: true
     allowed_content_types:
-      - "text/html"
-      - "text/plain"
-      - "application/xhtml+xml"
+    - text/html
+    - text/plain
+    - application/xhtml+xml
   cleaning:
     enabled: true
     mode: conservative
     drop_short_line_length: 0
     noise_keywords:
-      - "ad"
-      - "ads"
-      - "advert"
-      - "banner"
-      - "popup"
-      - "modal"
-      - "cookie"
-      - "consent"
-      - "sidebar"
-      - "footer"
-      - "toolbar"
-      - "recommend"
-      - "related"
-      - "comment"
-      - "social"
-      - "share"
-      - "sponsor"
-      - "widget"
-
+    - ad
+    - ads
+    - advert
+    - banner
+    - popup
+    - modal
+    - cookie
+    - consent
+    - sidebar
+    - footer
+    - toolbar
+    - recommend
+    - related
+    - comment
+    - social
+    - share
+    - sponsor
+    - widget
 chunk_size: 200
 chunk_overlap: 20
-
 chunking:
   default:
     chunk_size: 200
     chunk_overlap: 20
     separators:
-      - "\n\n"
-      - "\n### "
-      - "\n## "
-      - "\n# "
-      - "\n|"
-      - "\n- "
-      - "\n"
-      - "$$"
-      - "$"
-      - "。"
-      - "；"
-      - "，"
-      - ". "
-      - "; "
-      - ", "
-      - " "
+    - '
+
+
+      '
+    - '
+
+      ### '
+    - '
+
+      ## '
+    - '
+
+      # '
+    - '
+
+      |'
+    - '
+
+      - '
+    - '
+
+      '
+    - $$
+    - $
+    - 。
+    - ；
+    - ，
+    - '. '
+    - '; '
+    - ', '
+    - ' '
   source_type:
     web_url:
       chunk_size: 300
@@ -119,21 +150,35 @@ chunking:
     csv:
       chunk_size: 420
       chunk_overlap: 20
-
 separator:
-  - "\n\n"
-  - "\n### "
-  - "\n## "
-  - "\n# "
-  - "\n|"
-  - "\n- "
-  - "\n"
-  - "$$"
-  - "$"
-  - "。"
-  - "；"
-  - "，"
-  - ". "
-  - "; "
-  - ", "
-  - " "
+- '
+
+
+  '
+- '
+
+  ### '
+- '
+
+  ## '
+- '
+
+  # '
+- '
+
+  |'
+- '
+
+  - '
+- '
+
+  '
+- $$
+- $
+- 。
+- ；
+- ，
+- '. '
+- '; '
+- ', '
+- ' '

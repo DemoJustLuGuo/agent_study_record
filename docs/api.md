@@ -19,7 +19,7 @@ npm run dev
 Authorization: Bearer <APP_ADMIN_TOKEN>
 ```
 
-真实 API Key 不通过后端 API 返回，也不提供 settings API 写入入口。后端启动时会只读加载项目根目录 `.env`，但不会覆盖已存在的系统环境变量；修改 `.env` 后需要重启后端。
+真实 API Key 不通过后端 API 返回，也不提供 settings API 写入入口。后端启动时会只读加载项目根目录 `.env`，但不会覆盖已存在的系统环境变量。React 前端不读取 `APP_ADMIN_TOKEN`，只保存用户输入的本地 token。管理页可通过受保护接口轮换 `APP_ADMIN_TOKEN`，后端会写回 `.env` 并更新当前进程环境变量；手工修改 `.env` 后仍需要重启后端。
 
 ## 公共响应
 
@@ -35,7 +35,7 @@ Authorization: Bearer <APP_ADMIN_TOKEN>
 
 ```json
 {
-  "version": "0.16.0"
+  "version": "0.16.2"
 }
 ```
 
@@ -57,6 +57,43 @@ FastAPI `HTTPException.detail` 使用统一对象：
 - `unauthorized`
 - `forbidden`
 - `not_found`
+
+## Admin API
+
+以下接口均需要当前 Admin Token。
+
+### GET `/api/v1/admin/session`
+
+验证当前管理凭证是否有效。
+
+```json
+{
+  "ok": true,
+  "role": "admin"
+}
+```
+
+### PUT `/api/v1/admin/token`
+
+使用当前有效 token 轮换新的 `APP_ADMIN_TOKEN`。后端会写入项目根目录 `.env`，并同步更新当前进程环境变量；响应不会返回新 token。
+
+请求体：
+
+```json
+{
+  "new_token": "new-local-admin-token"
+}
+```
+
+响应：
+
+```json
+{
+  "updated": true,
+  "restart_required": false,
+  "message": "管理 Token 已写入 .env，并已对当前后端进程生效。"
+}
+```
 
 ## Chat API
 
@@ -226,6 +263,27 @@ event: error
 }
 ```
 
+响应：
+
+```json
+{
+  "query": "OFDM 是什么",
+  "answer": "...",
+  "references": [
+    {
+      "content": "...",
+      "metadata": {
+        "source": "通信原理知识100问.txt",
+        "source_type": "file"
+      }
+    }
+  ],
+  "retrieval_debug": {},
+  "rerank_debug": [],
+  "metrics": {}
+}
+```
+
 ### GET `/api/v1/rag/metrics`
 
 返回当前进程内 RAG 运行指标窗口，供控制台刷新展示。
@@ -262,24 +320,48 @@ event: error
 }
 ```
 
+### GET `/api/v1/rag/config`
+
+需要 Admin Token。返回允许在线管理的 RAG 配置子集，不返回未纳入白名单的配置项。
+
+```json
+{
+  "config": {
+    "retrieval": {
+      "top_k": 3,
+      "final_k": 3
+    },
+    "chunk_size": 200,
+    "chunk_overlap": 20
+  },
+  "default_config": {},
+  "schema_info": {}
+}
+```
+
+### PUT `/api/v1/rag/config`
+
+需要 Admin Token。仅允许更新白名单内的检索、重排和分块参数；非法类型、越界数值或未知字段会通过 `warnings` 返回，不会静默写入。
+
+请求体：
+
+```json
+{
+  "config": {
+    "retrieval": {
+      "top_k": 5
+    }
+  }
+}
+```
+
 响应：
 
 ```json
 {
-  "query": "OFDM 是什么",
-  "answer": "...",
-  "references": [
-    {
-      "content": "...",
-      "metadata": {
-        "source": "通信原理知识100问.txt",
-        "source_type": "file"
-      }
-    }
-  ],
-  "retrieval_debug": {},
-  "rerank_debug": [],
-  "metrics": {}
+  "updated": true,
+  "restart_required": true,
+  "warnings": []
 }
 ```
 

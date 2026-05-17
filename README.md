@@ -29,9 +29,9 @@ pip install -r requirements.txt
 - `APP_ADMIN_TOKEN`：FastAPI 管理类接口鉴权 token。
 - `OPENAI_BASE_URL`：OpenAI 兼容接口地址；未设置时继续使用 `model/config/agent.yml` 中的 `openai_base_url`。
 - `OPENAI_API_KEY` / `SILICONFLOW_API_KEY`：真实密钥只放在 `.env` 或系统环境变量中。
-- `VITE_API_BASE_URL` / `VITE_ADMIN_TOKEN`：前端本地开发变量，仅 `VITE_` 前缀会暴露给浏览器。
+- `VITE_API_BASE_URL`：前端本地开发访问的后端地址。管理 token 不使用 `VITE_*`，避免被打包进浏览器代码。
 
-`.env` 已被 `.gitignore` 忽略，不要提交真实密钥。修改 `.env` 后需要重启后端；前端 `VITE_*` 变量变更后也需要重启 Vite。
+`.env` 已被 `.gitignore` 忽略，不要提交真实密钥。管理页在已通过当前 token 鉴权后可轮换 `APP_ADMIN_TOKEN`，后端会写回 `.env` 并更新当前进程环境变量；手工修改 `.env` 后仍需要重启后端。前端 `VITE_*` 变量变更后需要重启 Vite。
 
 ### (3) 初始化知识库（建议）
 
@@ -104,7 +104,7 @@ agent_study_record/
 
 - `cd web && npm run dev` 启动的是 React/TS/Tailwind 前端控制台，覆盖 Chat、RAG、Knowledge、Traces 日常工作流。
 - `venv\Scripts\python.exe -m api.main` 启动的是正式 FastAPI 后端控制面，外部集成、新前端对接、聊天 SSE、RAG 查询、知识库管理和 trace 查询都应使用 FastAPI。
-- FastAPI 管理类接口使用 `APP_ADMIN_TOKEN` 鉴权；模型连接地址和真实 API Key 只通过 `.env` 或系统环境变量管理，不通过 Web UI 或 API 写入。
+- FastAPI 管理类接口使用 `APP_ADMIN_TOKEN` 鉴权；模型连接地址和真实 API Key 只通过 `.env` 或系统环境变量管理，不通过 Web UI 或 API 写入。React 前端不读取 `APP_ADMIN_TOKEN`，只在浏览器本地保存用户输入的管理 token。
 
 ## 知识库生命周期（CLI）
 
